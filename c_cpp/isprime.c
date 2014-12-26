@@ -97,7 +97,7 @@ void print_time(const char *heading, double time_ms)
  */
 void compute_prime(unsigned int num)
 {
-    int num, b_isprime;
+    int b_isprime;
     clock_t cpu_start, cpu_end;
     double cpu_diff;
     struct timeval real_start, real_end, real_diff;
