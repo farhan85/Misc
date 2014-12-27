@@ -44,6 +44,7 @@ unsigned int* new_sieve(unsigned int num)
 int is_prime(unsigned int num)
 {
     unsigned int *sieve, sqn, start_pos, i, num_bit, ptr_size;
+    div_t qr;
 
     /* Edge cases */
     if ((num == 0) || (num == 1)) return 0;
@@ -57,11 +58,13 @@ int is_prime(unsigned int num)
     {
         /* If this number is cleared, then so will all of its multiples, in which
            case there is nothing needed to be done. */
-        if (( sieve[start_pos/ptr_size] & (1 << (start_pos%ptr_size)) ) != 0) {
+        qr = div(start_pos, ptr_size);
+        if (( sieve[qr.quot] & (1 << qr.rem) ) != 0) {
             /* Clear all numbers that are multiples of 'sieve[start_pos]' */
             for (i = start_pos; i <= num; i = i + start_pos)
             {
-                sieve[i/ptr_size] &= ~(1 << i%ptr_size);
+                qr = div(i, ptr_size);
+                sieve[qr.quot] &= ~(1 << qr.rem);
             }
 
             if (i == num + start_pos)
@@ -73,7 +76,8 @@ int is_prime(unsigned int num)
     }
 
     /* Get the value of the bit at position 'num' */
-    num_bit = ( sieve[num/ptr_size] & (1 << (num%ptr_size)) ) != 0;
+    qr = div(i, ptr_size);
+    num_bit = ( sieve[qr.quot] & (1 << qr.rem) ) != 0;
 
     free(sieve);
 
