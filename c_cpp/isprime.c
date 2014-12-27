@@ -53,27 +53,26 @@ int is_prime(unsigned int num)
     /* The sieve we'll use to determine if num is a prime or not. */
     sieve = new_sieve(num);
 
-    /* sieve[1] represents the number 2. We only have to find multiples/factors up to sqrt(num). */
-    for (start_pos = 1; start_pos <= (unsigned int)sqrt(num); ++start_pos)
+    /* sieve[2] represents the number 2. We only have to find multiples/factors up to sqrt(num). */
+    for (start_pos = 2; start_pos <= (unsigned int)sqrt(num); ++start_pos)
     {
         /* If this number is cleared, then so will all of its multiples, in which
            case there is nothing needed to be done. */
         if (( sieve[num/MAX_BITS] & (1 << (start_pos%MAX_BITS)) ) != 0) {
             /* Clear all numbers that are multiples of 'sieve[start_pos]' */
-            for (i = start_pos; i <= num; i = i + (start_pos+1))
+            for (i = start_pos; i <= num; i = i + start_pos)
             {
                 sieve[i/MAX_BITS] &= ~(1 << i%MAX_BITS);
             }
         }
     }
 
-    /* Get the value of the bit at position 'num-1' */
-    num--;
+    /* Get the value of the bit at position 'num' */
     num_bit = ( sieve[num/MAX_BITS] & (1 << (num%MAX_BITS)) ) != 0;
 
     free(sieve);
 
-    // 'num' is a prime if the bit at position 'num - 1' was set.
+    // 'num' is a prime if the bit 'sieve[num]' was still set.
     return num_bit;
 }
 
