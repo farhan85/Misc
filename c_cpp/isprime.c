@@ -58,7 +58,7 @@ int is_prime(unsigned int num)
     {
         /* If this number is cleared, then so will all of its multiples, in which
            case there is nothing needed to be done. */
-        if (( sieve[num/MAX_BITS] & (1 << (start_pos%MAX_BITS)) ) != 0) {
+        if (( sieve[start_pos/MAX_BITS] & (1 << (start_pos%MAX_BITS)) ) != 0) {
             /* Clear all numbers that are multiples of 'sieve[start_pos]' */
             for (i = start_pos; i <= num; i = i + start_pos)
             {
