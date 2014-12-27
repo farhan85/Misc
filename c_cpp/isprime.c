@@ -56,10 +56,14 @@ int is_prime(unsigned int num)
     /* sieve[1] represents the number 2. We only have to find multiples/factors up to sqrt(num). */
     for (start_pos = 1; start_pos <= (unsigned int)sqrt(num); ++start_pos)
     {
-        /* Clear all numbers that are multiples of 'sieve[start_pos]' */
-        for (i = start_pos; i <= num; i = i + (start_pos+1))
-        {
-            sieve[i/MAX_BITS] &= ~(1 << i%MAX_BITS);
+        /* If this number is cleared, then so will all of its multiples, in which
+           case there is nothing needed to be done. */
+        if (( sieve[num/MAX_BITS] & (1 << (start_pos%MAX_BITS)) ) != 0) {
+            /* Clear all numbers that are multiples of 'sieve[start_pos]' */
+            for (i = start_pos; i <= num; i = i + (start_pos+1))
+            {
+                sieve[i/MAX_BITS] &= ~(1 << i%MAX_BITS);
+            }
         }
     }
 
