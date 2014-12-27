@@ -13,9 +13,6 @@
 #include <sys/time.h>
 
 
-unsigned int MAX_BITS = sizeof(unsigned int)*CHAR_BIT;
-
-
 /**
  * Returns an array of unsigned ints (bit array) with the first 'num' bits set to 1.
  *
@@ -27,9 +24,10 @@ unsigned int* new_sieve(unsigned int num)
     unsigned int *sieve, size, i;
 
     /* The size of the bit array */
-    size = num/MAX_BITS + 1;
+    size = num/(sizeof(unsigned int)*CHAR_BIT) + 1;
 
     sieve = (unsigned int*)malloc((size)*sizeof(unsigned int));
+    /* Set all the bits in the array */
     for (i = 0; i < size; ++i)
     {
         sieve[i] = UINT_MAX;
@@ -45,24 +43,26 @@ unsigned int* new_sieve(unsigned int num)
  */
 int is_prime(unsigned int num)
 {
-    unsigned int *sieve, sqn, start_pos, i, num_bit;
+    unsigned int *sieve, sqn, start_pos, i, num_bit, ptr_size;
 
     /* Edge cases */
     if ((num == 0) || (num == 1)) return 0;
 
     /* The sieve we'll use to determine if num is a prime or not. */
     sieve = new_sieve(num);
+    /* Number of bits the pointer refers to */
+    ptr_size = sizeof(sieve)*CHAR_BIT;
 
     /* sieve[2] represents the number 2. We only have to find multiples/factors up to sqrt(num). */
     for (start_pos = 2; start_pos <= (unsigned int)sqrt(num); ++start_pos)
     {
         /* If this number is cleared, then so will all of its multiples, in which
            case there is nothing needed to be done. */
-        if (( sieve[start_pos/MAX_BITS] & (1 << (start_pos%MAX_BITS)) ) != 0) {
+        if (( sieve[start_pos/ptr_size] & (1 << (start_pos%ptr_size)) ) != 0) {
             /* Clear all numbers that are multiples of 'sieve[start_pos]' */
             for (i = start_pos; i <= num; i = i + start_pos)
             {
-                sieve[i/MAX_BITS] &= ~(1 << i%MAX_BITS);
+                sieve[i/ptr_size] &= ~(1 << i%ptr_size);
             }
 
             if (i == num + start_pos)
@@ -74,7 +74,7 @@ int is_prime(unsigned int num)
     }
 
     /* Get the value of the bit at position 'num' */
-    num_bit = ( sieve[num/MAX_BITS] & (1 << (num%MAX_BITS)) ) != 0;
+    num_bit = ( sieve[num/ptr_size] & (1 << (num%ptr_size)) ) != 0;
 
     free(sieve);
 
