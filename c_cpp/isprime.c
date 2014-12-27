@@ -50,8 +50,7 @@ int is_prime(unsigned int num)
 
     /* The sieve we'll use to determine if num is a prime or not. */
     sieve = new_sieve(num);
-    /* Number of bits the pointer refers to */
-    ptr_size = sizeof(sieve)*CHAR_BIT;
+    ptr_size = sizeof(sieve[0])*CHAR_BIT;
 
     /* sieve[2] represents the number 2. We only have to find multiples/factors up to sqrt(num). */
     for (start_pos = 2; start_pos <= (unsigned int)sqrt(num); ++start_pos)
