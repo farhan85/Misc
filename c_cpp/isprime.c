@@ -65,6 +65,12 @@ int is_prime(unsigned int num)
                 sieve[i/MAX_BITS] &= ~(1 << i%MAX_BITS);
             }
         }
+
+        if (i == num + start_pos)
+        {
+            /* We've cleared 'sieve[num]' we now know it's not a prime number */
+            break;
+        }
     }
 
     /* Get the value of the bit at position 'num' */
