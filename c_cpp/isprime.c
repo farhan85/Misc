@@ -76,7 +76,7 @@ int is_prime(unsigned int num)
     }
 
     /* Get the value of the bit at position 'num' */
-    qr = div(i, ptr_size);
+    qr = div(num, ptr_size);
     num_bit = ( sieve[qr.quot] & (1 << qr.rem) ) != 0;
 
     free(sieve);
