@@ -69,6 +69,7 @@ int is_prime(unsigned int num)
 
             if (i == num + start_pos)
             {
+                printf("Divisible by %u\n", start_pos);
                 /* We've cleared 'sieve[num]' we now know it's not a prime number */
                 break;
             }
