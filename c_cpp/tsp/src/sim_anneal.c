@@ -7,6 +7,7 @@
 #include <stdio.h>
 
 #include <gsl/gsl_math.h>
+#include <gsl/gsl_permutation.h>
 #include <gsl/gsl_randist.h>
 #include <gsl/gsl_rng.h>
 #include <gsl/gsl_siman.h>
@@ -145,6 +146,7 @@ void sim_anneal_solve_tsp(node_t *cities, unsigned int num_cities, route_t *tsp_
     for (i = 0; i < num_cities; ++i) {
         tsp_solution->id[i] = i;
     }
+    gsl_ran_shuffle(rng, tsp_solution->id, num_cities, sizeof(unsigned int));
 
     gsl_siman_solve(rng, tsp_solution, energy_func_total_dist, rand_neighbour,
                     dist_between_routes, gsl_print_route, gsl_route_copy,
