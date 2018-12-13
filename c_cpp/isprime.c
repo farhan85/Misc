@@ -10,7 +10,11 @@
 #include <math.h>
 #include <stdlib.h>
 #include <stdio.h>
+
+// Windows
 #include <sys/time.h>
+// linux
+#include <time.h>
 
 
 #define ERROR_INCORRECT_ARGS          1
@@ -56,7 +60,7 @@ int is_prime(unsigned long num)
 {
     unsigned int *sieve;
     char num_bit;
-    unsigned long sqn, start_pos, i, ptr_size;
+    unsigned long start_pos, i, ptr_size;
     ldiv_t qr;
 
     /* Edge cases */
