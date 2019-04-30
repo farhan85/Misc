@@ -36,13 +36,13 @@ class UtcTime(object):
             self.dt = pytz.UTC.localize(datetime(*args))
 
     def epoch(self):
-        return timegm(self.dt.timetuple())
+        return timegm(self.dt.utctimetuple())
 
     def epoch_ms(self):
-        return int((self.epoch() * 1e3) + self.dt.microsecond/1e3)
+        return self.epoch() * 1000 + self.dt.microsecond/1000
 
     def epoch_us(self):
-        return int((self.epoch() * 1e6) + self.dt.microsecond)
+        return (self.epoch() * 1000000) + self.dt.microsecond
 
     def __str__(self):
         return str(self.dt)
