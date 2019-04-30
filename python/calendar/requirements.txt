@@ -1,0 +1,6 @@
+Click==7.0
+configparser==3.5.0
+enum34==1.1.6
+Jinja2==2.10
+pdfkit==0.6.0
+PyYAML==3.12

@@ -1,0 +1,95 @@
+<html>
+    <head>
+        <style>
+            .div-table {
+                display: table;
+                width: 1058px;
+                background-color: #ffffff;
+            }
+            .div-table-body {
+                display: table-row-group;
+            }
+            .div-table-row {
+                display: table-row;
+                width: auto;
+                clear: both;
+            }
+            .div-table-header {
+                float: left;
+                display: table-column;
+                width: 150px;
+                border: 2px solid #000000;
+                background-color: #ccc;
+                margin: -1px -1px 0 -2px;
+                text-align: center;
+                font-weight: bold;
+                padding: 5px 0 5px 0;
+            }
+            .div-table-cell {
+                float: left;
+                position: relative;
+                display: table-column;
+                width: 150px;
+                border: 1px solid #000000;
+                margin: -1px 0 0 -1px;
+                min-height: 6em;
+                height: 6em;
+            }
+            .div-table-cell-day {
+                text-align: right;
+                font-size: 16pt;
+                font-weight: bold;
+                position: relative;
+                min-height: 1em;
+                height: 1em;
+                padding:2px;
+            }
+            .div-table-cell-content {
+                text-align: right;
+                position: absolute;
+                bottom: 0;
+                right: 0;
+                padding:2px;
+            }
+            .div-public-holiday {
+                background-color: #b8b8b8;
+            }
+            .div-school-holiday {
+                background-color: #d8d8d8;
+            }
+        </style>
+    </head>
+
+    <body>
+
+        <h1>{{ month.name }} {{ year }}</h1>
+
+        <div class="div-table">
+            <div class="div-table-body">
+                <div class="div-table-row">
+                    {%- for day in days -%}
+                    <div class="div-table-header">{{ day }}</div>
+                    {% endfor %}
+                </div>
+
+                {% for row in range(0, month.num_rows()) %}
+                <div class="div-table-row">
+                    {%- for col in range(0,7) -%}
+                    {% set cell = month.cell(row, col) %}
+                    <div class="div-table-cell
+							{%- if cell.day_type.value == 2 -%}
+                                {{ ' ' }}div-school-holiday
+							{%- elif cell.day_type.value == 3 -%}
+                                {{ ' ' }}div-public-holiday
+							{% endif %}">
+                        <div class="div-table-cell-day">{{ cell.day }}</div>
+                        <div class="div-table-cell-content">{{ cell.notes | join('<br />') }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+            </div> <!-- div-table-body -->
+        </div> <!-- div-table -->
+    </body>
+</html>
