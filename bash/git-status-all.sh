@@ -31,13 +31,43 @@ while getopts ':d:h' OPT; do
 done
 shift $((OPTIND - 1))
 
+
+
+
+function is-git-repo() {
+    git status 1>/dev/null 2>&1
+}
+
+function is-up-to-date() {
+    # Run the command that lists which files have been modified
+    if [[ $(git status --porcelain  --untracked-files=no | wc -l) -gt 0 ]]; then
+        return 1
+    fi
+    return 0
+}
+
+function is-master-behind-origin() {
+    # Get commit IDs to check if they are the same
+    head_commit=$(git rev-parse master)
+    origin_latest_commit=$(git rev-parse origin/master)
+    if [[ "$head_commit" != "$origin_latest_commit" ]]; then
+        return 1
+    fi
+    return 0
+}
+
 for d in $(find $BASE_DIR -maxdepth 1 -type d); do
     cd $d
-    git status 1>/dev/null 2>&1
+    is-git-repo
     if [[ $? -eq 0 ]]; then
-        # $d is a git repo
-        if [[ $(git status --porcelain  --untracked-files=no | wc -l) -gt 0 ]]; then
-            echo "$d has changes"
+        is-up-to-date
+        if [[ $? -ne 0 ]]; then
+            echo "$(basename $d) has changes"
+        fi
+
+        is-master-behind-origin
+        if [[ $? -ne 0 ]]; then
+            echo "$(basename $d) master branch is not up to date"
         fi
     fi
 done
