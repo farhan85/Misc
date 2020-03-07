@@ -19,6 +19,9 @@ def to_epoch(dt):
     # Returns a unix epoch (seconds since Epoch)
     return timegm(dt.astimezone(pytz.UTC).timetuple())
 
+def now_epoch():
+    return timegm(datetime.now(pytz.UTC).timetuple())
+
 def to_datetime(epoch=None, str_dt=None):
     if str_dt:
         return pytz.UTC.localize(datetime.strptime(str_dt, '%Y-%m-%d %H:%M:%S'))
