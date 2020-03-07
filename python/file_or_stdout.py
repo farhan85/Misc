@@ -16,7 +16,7 @@ import sys
 @contextlib.contextmanager
 def file_writer(filename = None):
     # Create writer object based on file name
-    writer = open(filename, "w") if filename is not None else sys.stdout
+    writer = open(filename, 'w') if filename is not None else sys.stdout
     # yield the writer object for the actual use
     yield writer
     # If we did open a file, then close the writer object
@@ -24,7 +24,7 @@ def file_writer(filename = None):
 
 
 if __name__ == '__main__':
-    with file_writer("output.txt") as f:
+    with file_writer('output.txt') as f:
         f.write("Hello world. I've written to a file\n")
 
     with file_writer() as f:
