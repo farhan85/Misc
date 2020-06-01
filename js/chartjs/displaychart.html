@@ -1,0 +1,72 @@
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Testing Chart.js</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.16.0/d3.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js"></script>
+    </head>
+    <body>
+        <div style="width:75%">
+            <canvas id="myChart"></canvas>
+        </div>
+
+        <script>
+            Chart.defaults.global.elements.line.fill = false;
+            Chart.defaults.global.elements.line.tension = 0;
+            const COLOR_RED = "rgba(252,60,12,1)";
+            const COLOR_BLUE = "rgba(12,88,252,1)";
+
+            function createChart(data) {
+                var xLabels = data.columns.slice(1, data.columns.length)
+                var dataset1Label = data[0].Measurement
+                var dataset2Label = data[1].Measurement
+
+                var chart = new Chart('myChart', {
+                    type: 'line',
+                    data: {
+                        labels: xLabels,
+                        datasets: [
+                            {
+                                label: dataset1Label,
+                                borderColor: COLOR_RED,
+                                pointBackgroundColor: COLOR_RED,
+                                data: []
+                            },
+                            {
+                                label: dataset2Label,
+                                borderColor: COLOR_BLUE,
+                                pointBackgroundColor: COLOR_BLUE,
+                                data: []
+                            }
+                        ]
+                    }
+                });
+                updateChart(chart, data);
+                return chart;
+            }
+
+            function updateChart(chart, data) {
+                var xLabels = data.columns.slice(1, data.columns.length)
+                var dataset1 = xLabels.map(function(x) {return data[0][x]})
+                var dataset2 = xLabels.map(function(x) {return data[1][x]})
+
+                chart.data.datasets[0].data = dataset1
+                chart.data.datasets[1].data = dataset2
+                chart.update();
+            }
+
+            function setupAutomaticUpdates(chart) {
+                window.setInterval(
+                    () => d3.csv('data.csv').then(data => updateChart(chart, data)),
+                    5000
+                );
+            }
+
+            window.onload = function() {
+                d3.csv('data.csv')
+                    .then(createChart)
+                    .then(setupAutomaticUpdates);
+            }
+        </script>
+    </body>
+</html>
