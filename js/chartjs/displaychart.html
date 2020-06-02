@@ -19,6 +19,12 @@
             const COLOR_BLUE = "rgba(0, 102, 204, 1)";
             const DATA_URL = "data.csv";
 
+            window.onload = function() {
+                // Append random number to force browser to not read from cache
+                d3.csv(DATA_URL + '?' + Math.floor(Math.random() * 1000))
+                    .then(createChart);
+            }
+
             function createChart(data) {
                 var xLabels = data.columns.slice(1, data.columns.length)
                 var dataset1Label = data[0][data.columns[0]]
@@ -56,19 +62,6 @@
                 chart.data.datasets[0].data = dataset1
                 chart.data.datasets[1].data = dataset2
                 chart.update();
-            }
-
-            function setupAutomaticUpdates(chart) {
-                window.setInterval(
-                    () => d3.csv(DATA_URL).then(data => updateChartData(chart, data)),
-                    5000
-                );
-            }
-
-            window.onload = function() {
-                d3.csv(DATA_URL)
-                    .then(createChart)
-                    .then(setupAutomaticUpdates);
             }
         </script>
     </body>
