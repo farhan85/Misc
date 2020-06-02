@@ -11,15 +11,18 @@
         </div>
 
         <script>
+            Chart.defaults.global.elements.line.borderWidth = 1.5;
             Chart.defaults.global.elements.line.fill = false;
             Chart.defaults.global.elements.line.tension = 0;
-            const COLOR_RED = "rgba(252,60,12,1)";
-            const COLOR_BLUE = "rgba(12,88,252,1)";
+            Chart.defaults.global.elements.point.radius = 3;
+            const COLOR_RED = "rgba(204, 0, 0, 1)";
+            const COLOR_BLUE = "rgba(0, 102, 204, 1)";
+            const DATA_URL = "data.csv";
 
             function createChart(data) {
                 var xLabels = data.columns.slice(1, data.columns.length)
-                var dataset1Label = data[0].Measurement
-                var dataset2Label = data[1].Measurement
+                var dataset1Label = data[0][data.columns[0]]
+                var dataset2Label = data[1][data.columns[0]]
 
                 var chart = new Chart('myChart', {
                     type: 'line',
@@ -41,11 +44,11 @@
                         ]
                     }
                 });
-                updateChart(chart, data);
+                updateChartData(chart, data);
                 return chart;
             }
 
-            function updateChart(chart, data) {
+            function updateChartData(chart, data) {
                 var xLabels = data.columns.slice(1, data.columns.length)
                 var dataset1 = xLabels.map(function(x) {return data[0][x]})
                 var dataset2 = xLabels.map(function(x) {return data[1][x]})
@@ -57,13 +60,13 @@
 
             function setupAutomaticUpdates(chart) {
                 window.setInterval(
-                    () => d3.csv('data.csv').then(data => updateChart(chart, data)),
+                    () => d3.csv(DATA_URL).then(data => updateChartData(chart, data)),
                     5000
                 );
             }
 
             window.onload = function() {
-                d3.csv('data.csv')
+                d3.csv(DATA_URL)
                     .then(createChart)
                     .then(setupAutomaticUpdates);
             }

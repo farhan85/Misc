@@ -1,15 +1,15 @@
 #!/usr/bin/env bash
 
-PKG=testserver
-SERVER_DIR="/home/ec2-user/$PKG"
-WEB_DIR="/var/www/$PKG"
+SERVER_NAME=testserver
+SERVER_DIR="/home/ec2-user/$SERVER_NAME"
+WEB_DIR="/var/www/$SERVER_NAME"
 VENV="$SERVER_DIR/venv"
 PIP="$VENV/bin/pip"
 PYTHON="$VENV/bin/python"
 GUNICORN="$VENV/bin/gunicorn"
 SUPERVISORD="$VENV/bin/supervisord"
 SUPERVISORD_CONF=/etc/supervisord.conf
-SOCKFILE="$WEB_DIR/$PKG.sock"
+SOCKFILE="$WEB_DIR/$SERVER_NAME.sock"
 LISTEN_PORT=3000
 TEST_PORT=80
 
@@ -48,10 +48,10 @@ EOF
 
 cat <<EOF > "$SERVER_DIR/wsgi.py"
 """Exposes the ``app`` variable for Gunicorn"""
-from main import app as application
+from main import app
 
 if __name__ == "__main__":
-    application.run()
+    app.run()
 EOF
 
 cat <<EOF > "$SERVER_DIR/start-server-debug"
@@ -80,7 +80,7 @@ logfile_backups = 1
 pidfile = $SERVER_DIR/supervisor.pid
 nodaemon = false
 
-[program:$PKG]
+[program:$SERVER_NAME]
 command = $SERVER_DIR/start-gunicorn
 directory = $SERVER_DIR/
 stdout_logfile = $SERVER_DIR/supervisor.gunicorn.log
@@ -93,8 +93,8 @@ EOF
 
 sudo cp "$SERVER_DIR/supervisord.conf" $SUPERVISORD_CONF
 
-cat <<EOF > "$SERVER_DIR/$PKG.nginx.conf"
-upstream $PKG {
+cat <<EOF > "$SERVER_DIR/$SERVER_NAME.nginx.conf"
+upstream $SERVER_NAME {
     server unix:$SOCKFILE fail_timeout=0;
 }
 
@@ -117,12 +117,12 @@ server {
         # Don't want nginx trying to do something clever with redirects
         proxy_redirect off;
 
-        proxy_pass http://$PKG/;
+        proxy_pass http://$SERVER_NAME/;
     }
 }
 EOF
 
-sudo cp "$SERVER_DIR/$PKG.nginx.conf" /etc/nginx/conf.d/$PKG.conf
+sudo cp "$SERVER_DIR/$SERVER_NAME.nginx.conf" /etc/nginx/conf.d/$SERVER_NAME.conf
 
 # Start supervisord
 sudo $SUPERVISORD -c $SUPERVISORD_CONF
