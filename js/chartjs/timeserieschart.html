@@ -1,0 +1,77 @@
+<html>
+    <head>
+        <meta charset="UTF-8">
+        <title>Testing Chart.js</title>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/5.16.0/d3.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/moment.js/2.26.0/moment.min.js"></script>
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/2.9.3/Chart.min.js"></script>
+    </head>
+    <body>
+        <div style="width:75%">
+            <canvas id="myChart"></canvas>
+        </div>
+
+        <script>
+            Chart.defaults.global.elements.line.borderWidth = 1.5;
+            Chart.defaults.global.elements.line.fill = false;
+            Chart.defaults.global.elements.line.tension = 0;
+            Chart.defaults.global.elements.point.radius = 3;
+            const COLOR_RED = "rgba(204, 0, 0, 1)";
+            const DATA_URL = "data2.csv";
+
+            window.onload = function() {
+                getData()
+                    .then(createChart)
+                    .then(setupAutomaticUpdates);
+            }
+
+            function createChart(data) {
+                var chart = new Chart('myChart', {
+                    type: 'line',
+                    data: {
+                        datasets: [
+                            {
+                                label: 'Measurements',
+                                borderColor: COLOR_RED,
+                                pointBackgroundColor: COLOR_RED,
+                                data: []
+                            }
+                        ]
+                    },
+                    options: {
+                        animation: false,
+                        scales: {
+                            xAxes: [{
+                                type: 'time',
+                                time: {
+                                    parser: dt => moment.unix(dt),
+                                    tooltipFormat:"YYYY-MM-DD hh:mm",
+                                }
+                            }]
+                        }
+                    }
+                });
+                updateChartData(chart, data);
+                return chart;
+            }
+
+            function setupAutomaticUpdates(chart) {
+                window.setInterval(
+                    () => getData().then(data => updateChartData(chart, data)),
+                    5000
+                );
+            }
+
+            function updateChartData(chart, data) {
+                console.log(data);
+                chart.data.datasets[0].data = data.map(d => ({"t": d.timestamp, "y": d.value}));
+                chart.update();
+            }
+
+            function getData() {
+                // Append random number to force browser to not read from cache
+                return d3.csv(DATA_URL + '?' + Math.floor(Math.random() * 1000));
+            }
+        </script>
+    </body>
+</html>
