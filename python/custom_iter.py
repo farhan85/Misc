@@ -27,7 +27,22 @@ class TeamIterator(object):
         return self.team_list[self.team_list_index][self.index]
 
 
+def team_members(team):
+    for member in team.members:
+        yield member
+    for _staff in team.staff:
+        yield _staff
+
+
+print('Using iter class')
+
 team = Team(['John', 'Jack', 'Laura', 'Lisa'],
             ['Bob', 'Barry', 'Amanda', 'Anna'])
 for member in team:
+    print(member)
+
+print()
+print('Using generator method')
+
+for member in team_members(team):
     print(member)
