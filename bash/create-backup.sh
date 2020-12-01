@@ -58,30 +58,19 @@ read -r -d '' filesToArchive<<EOF
     ${HOME}/.vimrc
     ${HOME}/.vim
     ${HOME}/.gitconfig
-    ${HOME}/.tmux.conf
-    ${HOME}/bin
     ${HOME}/Documents
-    ${HOME}/ws/*/src
 EOF
 filesToArchive=$(echo "$filesToArchive" | tr '\n' ' ' | tr -s ' ')
 
 # Backup type
 dayOfMonth=$(date +%d)
 dayOfWeek=$(date +%u)
-extraPrefix=''
 if [ "${dayOfMonth}" = "02" ]; then
-    # I'm not going to delete monthy backups anymore.
-    # Organise these so that they are easier to sort/find
-    year=$(date +%Y)
-    extraPrefix="$year/"
     backupType="monthly"
-
 elif [ "${dayOfWeek}" = "7" ]; then # Sunday
     backupType='weekly'
-
 else
     backupType='daily'
-
 fi
 
 # Backup the files
