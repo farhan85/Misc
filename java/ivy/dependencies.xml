@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<ivy-module version="2.0">
+  <info organisation="my-org" module="my-module"/>
+
+  <!--
+    Go to mvnrepository.com to find the module org/name/rev
+    groupId = org
+    artifactId = name
+    version = rev
+  -->
+  <dependencies>
+    <dependency org="com.fasterxml.jackson.core" name="jackson-annotations" rev="2.9.7"/>
+    <dependency org="com.fasterxml.jackson.core" name="jackson-core" rev="2.9.7"/>
+    <dependency org="com.fasterxml.jackson.core" name="jackson-databind" rev="2.9.7"/>
+    <dependency org="com.fasterxml.jackson.dataformat" name="jackson-dataformat-cbor" rev="2.9.7"/>
+    <dependency org="com.google.guava" name="guava" rev="27.0-jre"/>
+    <dependency org="com.google.inject" name="guice" rev="4.2.3"/>
+    <dependency org="junit" name="junit" rev="4.12"/>
+    <dependency org="org.mockito" name="mockito-core" rev="3.3.3"/>
+  </dependencies>
+</ivy-module>
