@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import pytz
+import time
 
 from calendar import timegm
 from datetime import datetime, timezone
@@ -14,6 +15,9 @@ def now_utc():
 
 def to_epoch(dt):
     return timegm(dt.astimezone(timezone.utc).timetuple())
+
+def to_epoch2():
+    return int(time.time())
 
 def now_epoch():
     return timegm(datetime.now(timezone.utc).timetuple())
@@ -29,6 +33,7 @@ now = now_utc()
 print("now (local):", now.astimezone(tz_pdt))
 print("now (utc):", now.astimezone(timezone.utc))
 print("now (epoch):", to_epoch(now))
+print("now (epoch2):", to_epoch2())
 print()
 
 
