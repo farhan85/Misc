@@ -1,0 +1,18 @@
+[supervisord]
+numproces = 1
+logfile = {{ server_log_dir }}/supervisor.log
+logfile_maxbytes = 10MB
+logfile_backups = 1
+pidfile = {{ server_log_dir }}/supervisor.pid
+nodaemon = true
+user = ec2-user
+
+[program:{{ server_name }}]
+command = {{ server_venv_dir }}/bin/gunicorn -c {{ server_app_dir }}/gunicorn_conf.py wsgi:app
+directory = {{ server_app_dir }}/
+stdout_logfile = {{ server_log_dir }}/supervisor.{{ server_name }}.log
+stdout_logfile_maxbytes = 10MB
+stdout_logfile_backups = 1
+redirect_stderr = true
+environment=LANG=en_US.UTF-8,LC_ALL=en_US.UTF-8
+user = ec2-user

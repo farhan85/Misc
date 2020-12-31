@@ -1,0 +1,21 @@
+#vi: set ft=python
+
+from flask import Flask, request
+
+
+app = Flask(__name__)
+
+
+@app.route("/")
+def index():
+    return 'Hello world'
+
+
+@app.route("/echo", methods=['GET', 'POST'])
+def echo():
+    return request.values.get('data')
+
+
+if __name__ == '__main__':
+    # For debugging. This script can be run from the cli
+    app.run(host='0.0.0.0', port={{ debug_port }})

@@ -1,0 +1,11 @@
+#vi: set ft=python
+
+bind = 'unix:{{ sockfile }}'
+backlog = 1
+workers = 3
+pidfile = '{{ server_log_dir }}/gunicorn.pid'
+
+errorlog = '{{ server_log_dir }}/gunicorn.log'
+loglevel = 'info'
+accesslog = '{{ server_log_dir }}/gunicorn.access.log'
+access_log_format = '%(h)s %(l)s %(u)s %(t)s "%(r)s" %(s)s %(b)s "%(f)s" "%(a)s"'

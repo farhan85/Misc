@@ -1,0 +1,103 @@
+# This playbook will set up a simple echo server (on AL2 EC2 hosts)
+
+- hosts: servers
+  vars:
+    server_name: myserver
+    server_domain: myserver.test
+    server_web_dir: "/var/www/{{ server_name }}"
+    server_app_dir: "/home/ec2-user/{{ server_name }}"
+    server_venv_dir: "{{ server_app_dir }}/venv"
+    server_log_dir: "{{ server_app_dir }}/logs"
+    sockfile_dir: "/run/{{ server_name }}"
+    sockfile: "{{ sockfile_dir }}/{{ server_name }}.sock"
+    debug_port: 3000
+    listen_port: 5000
+
+  tasks:
+  - name: Enable nginx from extras library
+    become: true
+    command: amazon-linux-extras enable nginx1
+
+  - name: Install packages
+    become: true
+    yum:
+      name: "{{ item }}"
+      state: installed
+    loop:
+    - nginx
+    - python3
+
+  - name: Add Nginx config file
+    become: true
+    template:
+      src: "templates/nginx.conf.j2"
+      dest: "/etc/nginx/conf.d/{{ server_name }}.conf"
+
+  - name: Give nginx:ec2-user permission to run Nginx process
+    become: true
+    lineinfile:
+      path: /etc/nginx/nginx.conf
+      regexp: 'user .*;'
+      line: 'user nginx ec2-user;'
+
+  - name: Create sockfile directory
+    become: true
+    file:
+      path: "{{ sockfile_dir }}"
+      state: directory
+      mode: '0755'
+      owner: ec2-user
+      group: ec2-user
+
+  - name: Create venv
+    command: python3 -m venv "{{ server_venv_dir }}"
+
+  - name: Create log directory
+    file:
+      path: "{{ server_log_dir }}"
+      state: directory
+      mode: '0755'
+
+  - name: Install python dependencies
+    pip:
+      virtualenv: "{{ server_venv_dir }}"
+      name: "{{ item }}"
+    loop:
+    - flask
+    - gunicorn
+    - supervisor
+
+  - name: Deploy echo server
+    template:
+      src: "templates/echoserver.py.j2"
+      dest: "{{ server_app_dir }}/echoserver.py"
+
+  - name: Add wsgi file
+    template:
+      src: "templates/wsgi.py.j2"
+      dest: "{{ server_app_dir }}/wsgi.py"
+
+  - name: Add Gunicorn config file
+    template:
+      src: "templates/gunicorn.conf.py.j2"
+      dest: "{{ server_app_dir }}/gunicorn.conf.py"
+
+  - name: Add Supervisord config file
+    template:
+      src: "templates/supervisord.conf.j2"
+      dest: "{{ server_app_dir }}/supervisord.conf"
+
+  - name: Configure Systemd to run Supervisord
+    become: true
+    template:
+      src: "templates/supervisord.service.j2"
+      dest: "/etc/systemd/system/supervisord.service"
+
+  - name: Restart services
+    become: true
+    service:
+      name: "{{ item }}"
+      state: restarted
+    loop:
+    - nginx
+    - supervisord

@@ -1,0 +1,13 @@
+[Unit]
+Description=Controls supervisord for {{ server_name }}
+After=network.target
+
+[Service]
+Type=Simple
+ExecStart={{ server_venv_dir }}/bin/supervisord -c {{ server_app_dir}}/supervisord.conf
+ExecReload={{ server_venv_dir }}/bin/supervisorctl reload
+ExecStop={{ server_venv_dir }}/bin/supervisorctl shutdown
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target

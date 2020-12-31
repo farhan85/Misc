@@ -1,0 +1,44 @@
+upstream {{ server_name }} {
+    server unix:{{ sockfile }} fail_timeout=0;
+}
+
+# HTTP configuration
+server {
+    listen       {{ listen_port }};
+    listen       [::]:{{ listen_port }};
+    server_name  {{ server_domain }};
+    root         {{ server_web_dir }};
+
+    error_log    /var/log/nginx/{{ server_name }}_error.log;
+    access_log   /var/log/nginx/{{ server_name }}_access.log;
+
+    # Copied from nginx wiki
+    proxy_connect_timeout      90;
+    proxy_send_timeout         90;
+    proxy_read_timeout         90;
+    proxy_buffer_size          4k;
+    proxy_buffers              4 32k;
+    proxy_busy_buffers_size    64k;
+    proxy_temp_file_write_size 64k;
+
+    location / {
+        # Forward user's IP address to backend
+        proxy_set_header  X-Real-IP  $remote_addr;
+
+        # https config
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Host $http_host;
+        proxy_redirect off;
+        proxy_max_temp_file_size 0;
+
+        proxy_pass http://{{ server_name }};
+    }
+
+    # redirect error pages
+    error_page  403              /403.html;
+    error_page  404              /404.html;
+    error_page  500 502 503 504  /500.html;
+    location = /500.html {
+        root   /var/www/html;
+    }
+}
