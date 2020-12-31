@@ -33,7 +33,7 @@
       src: "templates/nginx.conf.j2"
       dest: "/etc/nginx/conf.d/{{ server_name }}.conf"
 
-  - name: Give nginx:ec2-user permission to run Nginx process
+  - name: Configure Nginx processes to run with nginx:ec2-user creds
     become: true
     lineinfile:
       path: /etc/nginx/nginx.conf
