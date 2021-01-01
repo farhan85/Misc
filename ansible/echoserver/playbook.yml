@@ -21,11 +21,10 @@
   - name: Install packages
     become: true
     yum:
-      name: "{{ item }}"
       state: installed
-    loop:
-    - nginx
-    - python3
+      name:
+      - nginx
+      - python3
 
   - name: Add Nginx config file
     become: true
@@ -61,11 +60,10 @@
   - name: Install python dependencies
     pip:
       virtualenv: "{{ server_venv_dir }}"
-      name: "{{ item }}"
-    loop:
-    - flask
-    - gunicorn
-    - supervisor
+      name:
+      - flask
+      - gunicorn
+      - supervisor
 
   - name: Deploy echo server
     template:
