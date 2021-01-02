@@ -1,0 +1,36 @@
+#!/usr/bin/env bash
+#vi: ft=bash
+
+export AWS_DEFAULT_REGION=
+
+export AWS_ACCESS_KEY_ID=
+export AWS_SECRET_ACCESS_KEY=
+export AWS_SESSION_TOKEN=
+
+
+ssh_key_name=
+stack_tag='test-stack'
+availability_zone="${AWS_DEFAULT_REGION}a"
+
+ami_id=$(aws ec2 describe-images \
+            --owners amazon \
+            --filters "Name=name,Values=amzn2-ami-hvm-*x86_64-ebs" \
+            --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
+            --output text)
+
+if aws cloudformation describe-stacks --stack-name $stack_tag &>/dev/null; then
+    cfn_command='update-stack'
+else
+    cfn_command='create-stack'
+fi
+
+set -x
+aws cloudformation $cfn_command \
+        --capabilities CAPABILITY_NAMED_IAM \
+        --stack-name "$stack_tag" \
+        --template-body file://test_stack.yaml \
+        --parameters \
+            ParameterKey=AMI,ParameterValue="$ami_id" \
+            ParameterKey=AvailabilityZone,ParameterValue="$availability_zone" \
+            ParameterKey=KeyName,ParameterValue="$ssh_key_name" \
+            ParameterKey=StackTag,ParameterValue="$stack_tag"
