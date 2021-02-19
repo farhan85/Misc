@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+# amzn2-* = New AL2
+# amzn-*  = Old AL2012
+# *-ebs = Magnetic disks
+# *-gp2 = SSD disks
+aws ec2 describe-images \
+    --owners amazon \
+    --filters "Name=name,Values=amzn2-ami-hvm-*x86_64-ebs" \
+    --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
+    --output text
