@@ -14,13 +14,13 @@ import sys
 
 
 @contextlib.contextmanager
-def file_writer(filename = None):
+def file_writer(filename=None):
     # Create writer object based on file name
-    writer = open(filename, 'w') if filename is not None else sys.stdout
+    writer = open(filename, 'w') if filename else sys.stdout
     # yield the writer object for the actual use
     yield writer
     # If we did open a file, then close the writer object
-    if filename != None: writer.close()
+    if filename: writer.close()
 
 
 if __name__ == '__main__':
