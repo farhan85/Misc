@@ -6,9 +6,9 @@ import time
 
 
 def make_async(func):
-    async def f(*args, **kwargs):
+    async def f(*args):
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, func, *args, **kwargs)
+        return await loop.run_in_executor(None, func, *args)
     return f
 
 
