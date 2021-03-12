@@ -1,0 +1,128 @@
+# aws cloudformation create-stack
+#   --capabilities CAPABILITY_NAMED_IAM \
+#   --stack-name ... \
+#   --template-body file://test_stack_single_subnet.yaml \
+#   --parameters ParameterKey=AvailabilityZone,ParameterValue=... \
+#                ParameterKey=KeyName,ParameterValue=... \
+#                ParameterKey=AMI,ParameterValue=...
+
+Description: VPC setup running tests
+Parameters:
+  AMI:
+    Type: String
+    Description: The AMI ID to use
+  InstanceType:
+    Type: String
+    Default: t2.micro
+    Description: Type of instances to launch in the customer's public subnet
+  KeyName:
+    Type: String
+    Description: The name of the EC2 key pair to use for all instances created
+  AvailabilityZone:
+    Type: String
+    Description: The public zone/AZ in which to launch this stack (e.g. ap-southeast-2a)
+
+Resources:
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+      InstanceTenancy: default
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VpcInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Ref AvailabilityZone
+      CidrBlock: 10.0.1.0/24
+      MapPublicIpOnLaunch: false
+
+  PublicSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicSubnetRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  PublicSubnetRouteToInternet:
+    Type: AWS::EC2::Route
+    DependsOn: VpcInternetGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicSubnetRouteTable
+
+  PublicSubnetSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for PublicSubnet
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: ec2.amazonaws.com
+      ManagedPolicyArns:
+      - Fn::Sub: arn:${AWS::Partition}:iam::aws:policy/ReadOnlyAccess
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      -  !Ref InstanceRole
+
+  PublicSubnetLaunchConfiguration:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: !Ref AMI
+      SecurityGroups:
+        - !Ref PublicSubnetSecurityGroup
+      AssociatePublicIpAddress: true
+      IamInstanceProfile: !Ref InstanceProfile
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      UserData:
+        Fn::Base64:
+          !Sub |
+          #!/bin/bash -xe
+          yum update -y
+          yum install python3 -y
+          python3 -m pip install boto3
+
+  PublicSubnetAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref PublicSubnetLaunchConfiguration
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet
+      MaxSize: 1
+      MinSize: 1
+      DesiredCapacity: 1
