@@ -1,14 +1,15 @@
 #!/usr/bin/env python3
 
 import asyncio
+import functools
 import random
 import time
 
 
 def make_async(func):
-    async def f(*args):
+    async def f(*args, **kwargs):
         loop = asyncio.get_event_loop()
-        return await loop.run_in_executor(None, func, *args)
+        return await loop.run_in_executor(None, functools.partial(func, *args, **kwargs))
     return f
 
 
