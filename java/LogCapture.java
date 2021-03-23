@@ -35,28 +35,29 @@ import static com.google.common.collect.ImmutableMap.toImmutableMap;
  */
 public class LogCapture extends ExternalResource {
 
-    private final ListAppender listAppender;
+    private static final String LIST_APPENDER_NAME = "UnitTestAppender";
     private final LoggerConfig loggerConfig;
 
     public LogCapture(String loggerName) {
         final LoggerContext loggerContext = (LoggerContext) LogManager.getContext(false);
         final Configuration configuration = loggerContext.getConfiguration();
         loggerConfig = configuration.getLoggerConfig(loggerName);
-        listAppender = new ListAppender();
-        loggerConfig.addAppender(listAppender, Level.ALL, null);
     }
 
     @Override
     public void before() {
+        if (loggerConfig.getAppenders().containsKey(LIST_APPENDER_NAME)) {
+            getListAppender().clearLogs();
+        }
+        loggerConfig.addAppender(new ListAppender(LIST_APPENDER_NAME), Level.ALL, null);
     }
 
-    @Override
-    public void after() {
-        listAppender.clearLogs();
+    public List<String> getLogs(final Level level) {
+        return getListAppender().getLogs(level);
     }
 
-    List<String> getLogs(final Level level) {
-	return listAppender.getLogs(level);
+    private ListAppender getListAppender() {
+        return (ListAppender) loggerConfig.getAppenders().get(LIST_APPENDER_NAME);
     }
 
     /**
@@ -66,9 +67,9 @@ public class LogCapture extends ExternalResource {
 
         private final Map<Level, List<String>> logs;
 
-        ListAppender() {
-            super("UnitTestAppender", null, null);
-            logs = Stream.of(Level.FATAL, Level.ERROR, Level.WARN, Level.INFO, Level.DEBUG, Level.TRACE)
+        ListAppender(final String appenderName) {
+            super(appenderName, null, null);
+            logs = Stream.of(Level.ERROR, Level.WARN, Level.INFO, Level.DEBUG, Level.TRACE)
                     .collect(toImmutableMap(Function.identity(), level -> Lists.newArrayList()));
         }
 
