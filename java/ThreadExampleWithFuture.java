@@ -15,12 +15,12 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-public class ThreadExample {
+public class ThreadExampleWithFuture {
 
     private final int threadPoolSize;
     private final int maxWaitTimeSeconds;
 
-    public ThreadExample(final int threadPoolSize, final int maxWaitTimeSeconds) {
+    public ThreadExampleWithFuture(final int threadPoolSize, final int maxWaitTimeSeconds) {
         this.threadPoolSize = threadPoolSize;
         this.maxWaitTimeSeconds = maxWaitTimeSeconds;
     }
@@ -69,7 +69,7 @@ public class ThreadExample {
     }
 
     public static void main(final String[] args) {
-        final ThreadExample threadExample = new ThreadExample(2, 10);
+        final ThreadExampleWithFuture threadExample = new ThreadExampleWithFuture(2, 10);
         final List<String> results = threadExample.runTest(Arrays.asList("abc", "def", "xyz", "foo", "bar"));
         System.out.println(results.stream().collect(Collectors.joining("\n")));
     }
