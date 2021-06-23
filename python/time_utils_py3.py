@@ -22,9 +22,12 @@ def to_epoch2():
 def now_epoch():
     return timegm(datetime.now(timezone.utc).timetuple())
 
-def to_datetime(epoch=None, str_dt=None, tz=timezone.utc):
+def to_datetime(epoch=None, str_dt=None, tz=None):
     if str_dt:
-        return datetime.strptime(str_dt, '%Y-%m-%d %H:%M:%S').astimezone(tz)
+        dt = datetime.strptime(str_dt, '%Y-%m-%d %H:%M:%S')
+        if tz:
+            tz.localize(dt)
+        return dt.astimezone(timezone.utc)
     elif epoch:
         return datetime.fromtimestamp(epoch, tz=tz)
 
@@ -46,7 +49,6 @@ print('Epoch:', epoch)
 print('Convert to local:', to_datetime(epoch=epoch).astimezone(tz_pdt))
 print('Convert to UTC:', to_datetime(epoch=epoch).astimezone(timezone.utc))
 print()
-
 
 print('Buiding datetime from UTC string')
 utc_dt = to_datetime(str_dt='2018-06-07 05:10:05')
