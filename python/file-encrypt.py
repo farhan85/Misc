@@ -82,8 +82,9 @@ def main(encrypt, decrypt, rsa_public_key, rsa_private_key, filename, output):
     When decrypting, the corresponding private RSA key must be provided, and this script will
     extract the AES key from the encrypted file and decrypt it.
 
-    If no output filename is given, then when encrypting it will be named "<input filename>.enc"
-    and when decrypting, the file's last extension (e.g. .enc) will be stripped off.
+    If no output filename is given, the encrypted file will be named "<input filename>.enc"
+    and when decrypting, the input filename with its last extension (e.g. .enc) stripped off
+    is used as the name of the output file.
     """
 
     if not encrypt and not decrypt:
@@ -95,15 +96,11 @@ def main(encrypt, decrypt, rsa_public_key, rsa_private_key, filename, output):
     if decrypt and rsa_private_key is None:
         raise click.UsageError('Must specify --rsa-private-key when decrypting')
 
-    if output is None:
-        if encrypt:
-            output = f'{filename}.enc'
-        if decrypt:
-            output = os.path.splitext(filename)[0]
-
     if encrypt:
+        output = output or f'{filename}.enc'
         encrypt_file_aes_cbc(filename, output, lambda k: rsa_encrypt(rsa_public_key, k))
     elif decrypt:
+        output = output or os.path.splitext(filename)[0]
         decrypt_file_aes_cbc(filename, output, lambda k: rsa_decrypt(rsa_private_key, k))
 
 
