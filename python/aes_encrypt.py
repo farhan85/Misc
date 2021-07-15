@@ -7,16 +7,19 @@ from Crypto.Util.Padding import pad, unpad
 from Crypto.Random import get_random_bytes
 
 
-def encrypt_aes_cbc(data):
-    key = get_random_bytes(16)
-    cipher = AES.new(key, AES.MODE_CBC)
-    ciphertext = cipher.encrypt(pad(data, AES.block_size))
-    return key, cipher.iv, ciphertext
-
-
-def decrypt_aes_cbc(key, iv, ciphertext):
+def encrypt_aes_cbc(data, key=None, iv=None):
+    key = key or get_random_bytes(16)
+    iv = iv or get_random_bytes(16)
     cipher = AES.new(key, AES.MODE_CBC, iv)
-    data = unpad(cipher.decrypt(ciphertext), AES.block_size)
+    data = pad(data, AES.block_size)
+    ciphertext = cipher.encrypt(data)
+    return ciphertext, key, cipher.iv
+
+
+def decrypt_aes_cbc(ciphertext, key, iv):
+    cipher = AES.new(key, AES.MODE_CBC, iv)
+    data = cipher.decrypt(ciphertext)
+    data = unpad(data, AES.block_size)
     return data
 
 
@@ -35,15 +38,19 @@ def main(encrypt, decrypt, input_string, key, initial_value):
             raise click.UsageError('Must specify --key and --initial-value when decrypting')
 
     if encrypt:
-        key, iv, ciphertext = encrypt_aes_cbc(input_string.encode('utf-8'))
+        key_b = b64decode(key.encode('utf-8')) if key else None
+        iv_b = b64decode(initial_value.encode('utf-8')) if initial_value else None
+        data_b = input_string.encode('utf-8')
+
+        ciphertext, key, iv = encrypt_aes_cbc(data_b, key_b, iv_b)
         print(f"AES key:    {b64encode(key).decode('utf-8')}")
         print(f"iv:         {b64encode(iv).decode('utf-8')}")
         print(f"ciphertext: {b64encode(ciphertext).decode('utf-8')}")
 
     elif decrypt:
-        data = decrypt_aes_cbc(b64decode(key.encode('utf-8')),
-                               b64decode(initial_value.encode('utf-8')),
-                               b64decode(input_string.encode('utf-8')))
+        data = decrypt_aes_cbc(b64decode(input_string.encode('utf-8')),
+                               b64decode(key.encode('utf-8')),
+                               b64decode(initial_value.encode('utf-8')))
         print(data.decode('utf-8'))
 
 
