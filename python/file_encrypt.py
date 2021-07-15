@@ -11,6 +11,11 @@ from Crypto.Random import get_random_bytes
 CHUNK_SIZE = 64 * 1024
 
 
+def read_from_file(filename):
+    with open(filename) as f:
+        return f.read()
+
+
 def rsa_encrypt(public_key_s, data):
     public_key = RSA.importKey(public_key_s)
     cipher = PKCS1_OAEP.new(public_key)
@@ -94,14 +99,12 @@ def main(encrypt, decrypt, rsa_public_key_file, rsa_private_key_file, input_file
         raise click.UsageError('Must specify --rsa-private-key-file when decrypting')
 
     if encrypt:
-        with open(rsa_public_key_file) as f:
-            public_key = f.read()
         output = output or f'{input_file}.enc'
+        public_key = read_from_file(rsa_public_key_file)
         encrypt_file_aes_cbc(input_file, output, lambda k: rsa_encrypt(public_key, k))
     elif decrypt:
-        with open(rsa_private_key_file) as f:
-            private_key = f.read()
         output = output or os.path.splitext(input_file)[0]
+        private_key = read_from_file(rsa_private_key_file)
         decrypt_file_aes_cbc(input_file, output, lambda k: rsa_decrypt(private_key, k))
 
 
