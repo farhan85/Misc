@@ -11,23 +11,21 @@ from Crypto.Random import get_random_bytes
 CHUNK_SIZE = 64 * 1024
 
 
-def rsa_encrypt(public_key_filename, data):
-    with open(public_key_filename) as f:
-        public_key = RSA.importKey(f.read())
+def rsa_encrypt(public_key_s, data):
+    public_key = RSA.importKey(public_key_s)
     cipher = PKCS1_OAEP.new(public_key)
     return cipher.encrypt(data)
 
 
-def rsa_decrypt(private_key_filename, data):
-    with open(private_key_filename) as f:
-        private_key = RSA.importKey(f.read())
+def rsa_decrypt(private_key_s, data):
+    private_key = RSA.importKey(private_key_s)
     cipher = PKCS1_OAEP.new(private_key)
     return cipher.decrypt(data)
 
 
-def encrypt_file_aes_cbc(input_filename, output_filename, key_encryptor):
+def encrypt_file_aes_cbc(input_filename, output_filename, key_encrypter):
     key = get_random_bytes(16)
-    encrypted_key = key_encryptor(key)
+    encrypted_key = key_encrypter(key)
     filesize = os.path.getsize(input_filename)
     cipher = AES.new(key, AES.MODE_CBC)
     with open(input_filename, 'rb') as input_file, open(output_filename, 'wb') as output_file:
@@ -44,33 +42,32 @@ def encrypt_file_aes_cbc(input_filename, output_filename, key_encryptor):
             output_file.write(cipher.encrypt(chunk))
 
 
-def decrypt_file_aes_cbc(input_filename, output_filename, key_decryptor):
-    with open(input_filename, 'rb') as input_file:
+def decrypt_file_aes_cbc(input_filename, output_filename, key_decrypter):
+    with open(input_filename, 'rb') as input_file, open(output_filename, 'wb') as output_file:
         int_len = struct.calcsize('Q')
         filesize = struct.unpack('<Q', input_file.read(int_len))[0]
         enc_key_len = struct.unpack('<Q', input_file.read(int_len))[0]
         enc_key = input_file.read(enc_key_len)
         iv = input_file.read(16)
 
-        key = key_decryptor(enc_key)
+        key = key_decrypter(enc_key)
         cipher = AES.new(key, AES.MODE_CBC, iv)
-        with open(output_filename, 'wb') as output_file:
-            while True:
-                chunk = input_file.read(CHUNK_SIZE)
-                if len(chunk) == 0:
-                    break
-                output_file.write(cipher.decrypt(chunk))
-            output_file.truncate(filesize)
+        while True:
+            chunk = input_file.read(CHUNK_SIZE)
+            if len(chunk) == 0:
+                break
+            output_file.write(cipher.decrypt(chunk))
+        output_file.truncate(filesize)
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
 @click.option('-e', '--encrypt', is_flag=True, help='Encrypt the input file')
 @click.option('-d', '--decrypt', is_flag=True, help='Decrypt the input file')
-@click.option('-b', '--rsa-public-key', help='RSA public key file')
-@click.option('-v', '--rsa-private-key', help='RSA private key file')
-@click.option('-f', '--filename', '--file', help='File to encrypt', required=True)
+@click.option('-b', '--rsa-public-key-file', help='RSA public key file')
+@click.option('-v', '--rsa-private-key-file', help='RSA private key file')
+@click.option('-f', '--input-file', '--file', help='File to encrypt', required=True)
 @click.option('-o', '--output', help='Output filename')
-def main(encrypt, decrypt, rsa_public_key, rsa_private_key, filename, output):
+def main(encrypt, decrypt, rsa_public_key_file, rsa_private_key_file, input_file, output):
     """
     Encrypts a given file, storing the relevent keys in the same binary file, and can decrypt
     the file as well.
@@ -90,18 +87,22 @@ def main(encrypt, decrypt, rsa_public_key, rsa_private_key, filename, output):
     if not encrypt and not decrypt:
         raise click.UsageError('Must specify either --encrypt or --decrypt')
 
-    if encrypt and rsa_public_key is None:
-        raise click.UsageError('Must specify --rsa-public-key when encrypting')
+    if encrypt and rsa_public_key_file is None:
+        raise click.UsageError('Must specify --rsa-public-key-file when encrypting')
 
-    if decrypt and rsa_private_key is None:
-        raise click.UsageError('Must specify --rsa-private-key when decrypting')
+    if decrypt and rsa_private_key_file is None:
+        raise click.UsageError('Must specify --rsa-private-key-file when decrypting')
 
     if encrypt:
-        output = output or f'{filename}.enc'
-        encrypt_file_aes_cbc(filename, output, lambda k: rsa_encrypt(rsa_public_key, k))
+        with open(rsa_public_key_file) as f:
+            public_key = f.read()
+        output = output or f'{input_file}.enc'
+        encrypt_file_aes_cbc(input_file, output, lambda k: rsa_encrypt(public_key, k))
     elif decrypt:
-        output = output or os.path.splitext(filename)[0]
-        decrypt_file_aes_cbc(filename, output, lambda k: rsa_decrypt(rsa_private_key, k))
+        with open(rsa_private_key_file) as f:
+            private_key = f.read()
+        output = output or os.path.splitext(input_file)[0]
+        decrypt_file_aes_cbc(input_file, output, lambda k: rsa_decrypt(private_key, k))
 
 
 if __name__ == '__main__':
