@@ -6,17 +6,12 @@ dummy values to AWS IoT SiteWise.
 
 import os
 import random
-from datetime import datetime
 from math import cos, sin, pi
 
 import boto3
+import iso8601
 from awsretry import AWSRetry
 from botocore.exceptions import ClientError
-
-
-def iso_str_to_dt(iso_str):
-    iso_str = iso_str.replace('+00:00', 'Z')
-    return datetime.strptime(iso_str, '%Y-%m-%dT%H:%M:%SZ')
 
 
 def to_epoch(dt):
@@ -63,7 +58,7 @@ def send_values(sitewise_client, entries):
 
 def handler(event, context):
     region = os.environ["AWS_REGION"]
-    timestamp = iso_str_to_dt(event['time']).replace(second=0)
+    timestamp = iso8601.parse_date(event['time']).replace(second=0)
 
     print(f'Region: {region}')
     print(f'Timestamp: {timestamp}')

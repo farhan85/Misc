@@ -1,3 +1,4 @@
 awsretry==1.0.1
 boto3==1.20.19
 python-lambda==11.8.0
+iso8601==1.0.2
