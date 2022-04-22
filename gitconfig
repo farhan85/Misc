@@ -1,0 +1,24 @@
+# Copy this to ~/.gitconfig
+
+[user]
+    name = farhan85
+    email = 4463436+farhan85@users.noreply.github.com
+
+[alias]
+    dag = log --graph --format='format:%C(yellow)%h%C(reset) %C(blue)\"%an\" <%ae>%C(reset) %C(magenta)%ar%C(reset)%C(auto)%d%C(reset)%n%s' --date
+    lg = log --color --graph --pretty=format:'%C(magenta)%h%Creset -%C(yellow)%d%Creset %s %Cgreen(%cr) %C(bold blue)<%an>%Creset' --abbrev-commit
+[color]
+    ui = auto
+[color "diff"]
+    # Highlights bad whitespace (at EOL, etc.) in red
+    whitespace = red reverse
+[core]
+    pager = less -FMRSiw
+[diff]
+    tool = vimdiff
+[merge]
+    tool = vimdiff
+[pull]
+    rebase = true
+[push]
+    default = simple
