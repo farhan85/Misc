@@ -20,8 +20,6 @@
 # 0 1 * * * { ${HOME}/bin/create-backup.sh }
 
 
-OPENSSL="/.../openssl"
-
 PUBKEY="${HOME}/.ssh/backup_rsa.openssl.pub"
 
 # Working directory
@@ -84,9 +82,9 @@ backupName="backup-${backupType}-${dateStr}"
 backupTarFile="${backupName}.tar"
 backupGzipFile="${backupTarFile}.gz"
 backupEncFile="${backupGzipFile}.enc"
-# This backup file contains the encrypted backup file along with
+# The combined backup file contains the encrypted backup file along with
 # its corresponding encrypted key
-backupFile="${backupName}.tar"
+combinedBackupFile="${backupName}.tar"
 
 log "Archiving files"
 tar -cf $backupTarFile $filesToArchive
@@ -98,13 +96,13 @@ filesize $backupGzipFile
 
 log "Encrypting files"
 # New random key to encrypt the backups
-$OPENSSL rand 192 -out key
+openssl rand 192 -out key.bin
 # Encrypt the backups with the new key
-$OPENSSL enc -e -aes256 -in $backupGzipFile -out $backupEncFile -pass file:key
+openssl enc -e -aes256 -in $backupGzipFile -out $backupEncFile -pass file:key.bin
 # Encrypt the new key with my public RSA key
-$OPENSSL rsautl -encrypt -in key -out key.enc -pubin -inkey $PUBKEY
+openssl rsautl -encrypt -in key.bin -out key.enc -pubin -inkey $PUBKEY
 # Keep the key with the encrypted archive
-tar -cf "$backupFile" $backupEncFile key.enc
-filesize $backupFile
+tar -cf $combinedBackupFile $backupEncFile key.enc
+filesize $combinedBackupFile
 
-# TODO: Upload the backup file to S3 or somewhere
+# TODO: Upload the combined backup file to S3 or somewhere
