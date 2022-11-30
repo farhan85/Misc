@@ -98,8 +98,10 @@ Resources:
         - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
       SecurityGroupIngress:
-        - IpProtocol: "-1"
-          CidrIp: 10.0.0.0/16
+        - IpProtocol: tcp
+          FromPort: 0
+          ToPort: 65535
+          SourceSecurityGroupId: !Ref PublicSubnetSecurityGroup
       Tags:
         - Key: Name
           Value: !Sub "${StackTag}-private-subnet-sg"
@@ -112,12 +114,27 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: "-1"
           CidrIp: 0.0.0.0/0
-      SecurityGroupIngress:
-        - IpProtocol: "-1"
-          CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
           Value: !Sub "${StackTag}-public-subnet-sg"
+
+  PublicSubnetAllowSshFromInternet:
+    Type: AWS::EC2::SecurityGroupIngress
+    Properties:
+      GroupId: !Ref PublicSubnetSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      CidrIp: 0.0.0.0/0
+
+  PublicSubnetAllowSshToPrivateSubnet:
+    Type: AWS::EC2::SecurityGroupEgress
+    Properties:
+      GroupId: !Ref PublicSubnetSecurityGroup
+      IpProtocol: tcp
+      FromPort: 22
+      ToPort: 22
+      DestinationSecurityGroupId: !Ref PrivateSubnetSecurityGroup
 
   MainVpcInternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -181,53 +198,64 @@ Resources:
         - !Ref InstanceRole
       Path: "/"
 
-  PrivateSubnetLaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  PrivateSubnetLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      SecurityGroups:
-        - !Ref PrivateSubnetSecurityGroup
-      AssociatePublicIpAddress: false
-      ImageId: !Ref AMI
-      InstanceMonitoring: true
-      IamInstanceProfile: !Ref InstanceProfile
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
+      LaunchTemplateData:
+        ImageId: !Ref AMI
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        Monitoring:
+          Enabled: true
+        SecurityGroupIds:
+          - !GetAtt PrivateSubnetSecurityGroup.GroupId
 
   PrivateSubnetAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      LaunchConfigurationName: !Ref PrivateSubnetLaunchConfiguration
-      VPCZoneIdentifier:
-        - !Ref PrivateSubnet
       MaxSize: 1
       MinSize: 1
       DesiredCapacity: 1
+      LaunchTemplate:
+        LaunchTemplateId: !Ref PrivateSubnetLaunchTemplate
+        Version: !GetAtt PrivateSubnetLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - !Ref PrivateSubnet
       Tags:
         - Key: Name
           Value: !Sub "${StackTag}-private-inst"
           PropagateAtLaunch: true
 
-  PublicSubnetLaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  PublicSubnetLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      SecurityGroups:
-        - !Ref PublicSubnetSecurityGroup
-      AssociatePublicIpAddress: true
-      ImageId: !Ref AMI
-      InstanceMonitoring: true
-      IamInstanceProfile: !Ref InstanceProfile
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
+      LaunchTemplateData:
+        ImageId: !Ref AMI
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        Monitoring:
+          Enabled: true
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref PublicSubnetSecurityGroup
 
   PublicSubnetAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      LaunchConfigurationName: !Ref PublicSubnetLaunchConfiguration
-      VPCZoneIdentifier:
-        - !Ref PublicSubnet
       MaxSize: 1
       MinSize: 1
       DesiredCapacity: 1
+      LaunchTemplate:
+        LaunchTemplateId: !Ref PublicSubnetLaunchTemplate
+        Version: !GetAtt PublicSubnetLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet
       Tags:
         - Key: Name
           Value: !Sub "${StackTag}-public-inst"
