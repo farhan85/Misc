@@ -23,9 +23,6 @@ Parameters:
   AvailabilityZone:
     Type: String
     Description: The availability zone in which to launch this stack (e.g. us-east-1b)
-  StackTag:
-    Type: String
-    Description: A tag/prefix describing what this stack is used for
 
 Resources:
   MainVpc:
@@ -37,7 +34,7 @@ Resources:
       InstanceTenancy: default
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-vpc"
+          Value: !Sub "${AWS::StackName}-vpc"
 
   PublicSubnet:
     Type: AWS::EC2::Subnet
@@ -48,7 +45,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-public-subnet"
+          Value: !Sub "${AWS::StackName}-public-subnet"
 
   PrivateSubnet:
     Type: AWS::EC2::Subnet
@@ -59,7 +56,7 @@ Resources:
       MapPublicIpOnLaunch: false
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-private-subnet"
+          Value: !Sub "${AWS::StackName}-private-subnet"
 
   PublicSubnetRouteTable:
     Type: AWS::EC2::RouteTable
@@ -67,7 +64,7 @@ Resources:
       VpcId: !Ref MainVpc
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-public-subnet-rt"
+          Value: !Sub "${AWS::StackName}-public-subnet-rt"
 
   PublicSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -81,7 +78,7 @@ Resources:
       VpcId: !Ref MainVpc
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-private-subnet-rt"
+          Value: !Sub "${AWS::StackName}-private-subnet-rt"
 
   PrivateSubnetRouteTableAssociation:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -104,7 +101,7 @@ Resources:
           SourceSecurityGroupId: !Ref PublicSubnetSecurityGroup
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-private-subnet-sg"
+          Value: !Sub "${AWS::StackName}-private-subnet-sg"
 
   PublicSubnetSecurityGroup:
     Type: AWS::EC2::SecurityGroup
@@ -116,7 +113,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-public-subnet-sg"
+          Value: !Sub "${AWS::StackName}-public-subnet-sg"
 
   PublicSubnetAllowSshFromInternet:
     Type: AWS::EC2::SecurityGroupIngress
@@ -141,7 +138,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-igw"
+          Value: !Sub "${AWS::StackName}-igw"
 
   MainVpcInternetGatewayAttachment:
     Type: AWS::EC2::VPCGatewayAttachment
@@ -168,7 +165,7 @@ Resources:
       SubnetId: !Ref PublicSubnet
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-natgw"
+          Value: !Sub "${AWS::StackName}-natgw"
 
   PrivateSubnetRouteToNatGateway:
     Type: AWS::EC2::Route
@@ -225,7 +222,7 @@ Resources:
         - !Ref PrivateSubnet
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-private-inst"
+          Value: !Sub "${AWS::StackName}-private-inst"
           PropagateAtLaunch: true
 
   PublicSubnetLaunchTemplate:
@@ -258,5 +255,5 @@ Resources:
         - !Ref PublicSubnet
       Tags:
         - Key: Name
-          Value: !Sub "${StackTag}-public-inst"
+          Value: !Sub "${AWS::StackName}-public-inst"
           PropagateAtLaunch: true

@@ -117,6 +117,10 @@ Resources:
           Fn::Base64:
             !Sub |
             #!/bin/bash -xe
+            cat > /etc/profile.d/load_env.sh << 'EOF'
+            export AWS_DEFAULT_REGION=${AWS::Region}
+            EOF
+
             yum update -y
             yum install python3 -y
             python3 -m pip install boto3
@@ -132,3 +136,7 @@ Resources:
         Version: !GetAtt PublicSubnetLaunchTemplate.LatestVersionNumber
       VPCZoneIdentifier:
         - !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-inst"
+          PropagateAtLaunch: true

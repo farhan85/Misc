@@ -32,5 +32,4 @@ aws cloudformation $cfn_command \
         --parameters \
             ParameterKey=AMI,ParameterValue="$ami_id" \
             ParameterKey=AvailabilityZone,ParameterValue="$availability_zone" \
-            ParameterKey=KeyName,ParameterValue="$ssh_key_name" \
-            ParameterKey=StackTag,ParameterValue="$stack_tag"
+            ParameterKey=KeyName,ParameterValue="$ssh_key_name"
