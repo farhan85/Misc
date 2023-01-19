@@ -1,5 +1,13 @@
 #!/usr/bin/env python3
 
+"""
+An example of using dependency injection in python.
+
+Note: If you're using dependency injection to write easier unit tests, then you don't
+really need to use a DI package. Python allows you to patch function calls to mock
+behaviour in your unit tests.
+"""
+
 import boto3
 import pinject
 
