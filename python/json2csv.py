@@ -20,7 +20,7 @@ Example (JSON-to-CSV):
   4,5,6
   7,8,9
 
-Example (JSON-to-CSV):
+Example (CSV-to-JSON):
 
   > cat input.csv
    field1,field2,field3
@@ -36,6 +36,7 @@ import argparse
 import contextlib
 import csv
 import json
+import os
 import sys
 
 
@@ -60,8 +61,16 @@ def to_csv(input_filename):
 def to_json(input_filename):
     with file_reader(input_filename, newline='') as f:
         csv_reader = csv.DictReader(f)
-    data = list(csv_reader)
+        data = list(csv_reader)
     print(json.dumps(data))
+
+
+def main(input_filename=None, json=None):
+    file_extension = os.path.splitext(input_filename)[1] if input_filename else None
+    if json or file_extension == '.csv':
+        to_json(input_filename)
+    else:
+        to_csv(input_filename)
 
 
 if __name__ == '__main__':
@@ -71,7 +80,7 @@ if __name__ == '__main__':
     parser.add_argument('-r', '-j', '--json', help='Reverse operation (Convert to JSON)', action='store_true')
     args = parser.parse_args()
 
-    if args.json:
-        to_json(args.file)
-    else:
-        to_csv(args.file)
+    try:
+        main(args.file, args.json)
+    except json.decoder.JSONDecodeError as e:
+        sys.exit(f'Error reading JSON: {e}')

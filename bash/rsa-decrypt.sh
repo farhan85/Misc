@@ -32,5 +32,9 @@ openssl rsautl -decrypt -in $AES_KEY_ENC -out $AES_KEY -inkey "$PRIVATE_KEY_FILE
 # Decrypt the encrypted file with the AES key
 openssl enc -d -aes256 -in "$ENCRYPTED_FILE" -out $PLAINTEXT_FILE -pass "file:$AES_KEY"
 
+# If you're using a newer version of openssl to decrypt a file that was encrypted
+# with an older version of openssl, use the old message digest format (md5):
+# openssl enc -d -aes256 -md md5 -in "$ENCRYPTED_FILE" -out $PLAINTEXT_FILE -pass "file:$AES_KEY"
+
 # Cleanup
 rm $AES_KEY $AES_KEY_ENC $ENCRYPTED_FILE

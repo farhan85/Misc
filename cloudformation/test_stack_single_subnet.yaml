@@ -99,30 +99,44 @@ Resources:
       Roles:
       -  !Ref InstanceRole
 
-  PublicSubnetLaunchConfiguration:
-    Type: AWS::AutoScaling::LaunchConfiguration
+  PublicSubnetLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
     Properties:
-      ImageId: !Ref AMI
-      SecurityGroups:
-        - !Ref PublicSubnetSecurityGroup
-      AssociatePublicIpAddress: true
-      IamInstanceProfile: !Ref InstanceProfile
-      InstanceType: !Ref InstanceType
-      KeyName: !Ref KeyName
-      UserData:
-        Fn::Base64:
-          !Sub |
-          #!/bin/bash -xe
-          yum update -y
-          yum install python3 -y
-          python3 -m pip install boto3
+      LaunchTemplateData:
+        ImageId: !Ref AMI
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref PublicSubnetSecurityGroup
+        UserData:
+          Fn::Base64:
+            !Sub |
+            #!/bin/bash -xe
+            cat > /etc/profile.d/load_env.sh << 'EOF'
+            export AWS_DEFAULT_REGION=${AWS::Region}
+            EOF
+
+            yum update -y
+            yum install python3 -y
+            python3 -m pip install boto3
 
   PublicSubnetAutoScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
-      LaunchConfigurationName: !Ref PublicSubnetLaunchConfiguration
-      VPCZoneIdentifier:
-        - !Ref PublicSubnet
       MaxSize: 1
       MinSize: 1
       DesiredCapacity: 1
+      LaunchTemplate:
+        LaunchTemplateId: !Ref PublicSubnetLaunchTemplate
+        Version: !GetAtt PublicSubnetLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-inst"
+          PropagateAtLaunch: true

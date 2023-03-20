@@ -1,69 +1,63 @@
 #!/usr/bin/env python3
 
+import iso8601
 import pytz
-import time
-
-from calendar import timegm
 from datetime import datetime, timezone
 
 
-tz_pdt = pytz.timezone("America/Los_Angeles")
+tz_pst = pytz.timezone('America/Los_Angeles')
+tz_est = pytz.timezone('America/New_York')
 
 
 def now_utc():
     return datetime.now(timezone.utc)
 
+
 def to_epoch(dt):
-    return timegm(dt.astimezone(timezone.utc).timetuple())
+    # If it's already in UTC: int(dt.timestamp())
+    return int(dt.astimezone(timezone.utc).timestamp())
 
-def to_epoch2():
-    return int(time.time())
 
-def now_epoch():
-    return timegm(datetime.now(timezone.utc).timetuple())
-
-def to_datetime(epoch=None, str_dt=None, tz=None):
-    if str_dt:
-        dt = datetime.strptime(str_dt, '%Y-%m-%d %H:%M:%S')
-        if tz:
-            tz.localize(dt)
-        return dt.astimezone(timezone.utc)
-    elif epoch:
-        return datetime.fromtimestamp(epoch, tz=tz)
+def from_iso_str(s):
+    # The iso8601 package can handle the 'Z' format, but datetime only understands '+00:00' format
+    return datetime.fromisoformat(s.replace('Z','')).astimezone(timezone.utc)
 
 
 now = now_utc()
-print("now (local):", now.astimezone(tz_pdt))
-print("now (utc):", now.astimezone(timezone.utc))
+print("now (local):", now.astimezone(tz_pst))
+print("now (utc):", now)
 print("now (epoch):", to_epoch(now))
-print("now (epoch2):", to_epoch2())
+print("now (ISO):", now.isoformat())
+print("now (custom):", now.strftime('%d/%m/%y %H:%M:%S'))
 print()
 
 
-print('Buiding datetime from constructor')
-print('Starting date: 2012-04-01 00:00 PDT')
-local_dt = tz_pdt.localize(datetime(2012, 4, 1, 0, 0))
-# prints 1333238400
-epoch = to_epoch(local_dt)
-print('Epoch:', epoch)
-print('Convert to local:', to_datetime(epoch=epoch).astimezone(tz_pdt))
-print('Convert to UTC:', to_datetime(epoch=epoch).astimezone(timezone.utc))
+print('Buiding datetime from datetime constructor')
+est_dt = tz_est.localize(datetime(2012, 6, 20, 11, 10, 5))
+print('Starting date:', str(est_dt))
+print('Epoch:', to_epoch(est_dt))
+print('Convert to local:', est_dt.astimezone(tz_pst))
+print('Convert to UTC:', est_dt.astimezone(timezone.utc))
 print()
 
-print('Buiding datetime from UTC string')
-utc_dt = to_datetime(str_dt='2018-06-07 05:10:05')
-print('UTC dt:', utc_dt)
-epoch = to_epoch(utc_dt)
-print('Epoch:', epoch)
-print('Convert to local:', to_datetime(epoch=epoch).astimezone(tz_pdt))
-print('Convert to UTC:', to_datetime(epoch=epoch).astimezone(timezone.utc))
+print('Buiding datetime from string')
+utc_dt = datetime.strptime('30/12/22 22:35:45', '%d/%m/%y %H:%M:%S').replace(tzinfo=timezone.utc)
+print('Starting date:', utc_dt)
+print('Epoch:', to_epoch(utc_dt))
+print('Convert to local:', utc_dt.astimezone(tz_pst))
+print('Convert to EST:', utc_dt.astimezone(tz_est))
+print()
+
+print('Buiding datetime from ISO string')
+utc_dt = from_iso_str('2022-12-30T22:35:45.123456Z')
+print('Starting date:', utc_dt)
+print('Epoch:', to_epoch(utc_dt))
+print('Convert to local:', utc_dt.astimezone(tz_pst))
+print('Convert to EST:', utc_dt.astimezone(tz_est))
 print()
 
 
-print('Buiding datetime from PDT string')
-local_dt = to_datetime(str_dt='2018-06-07 13:00:00', tz=tz_pdt)
-print('Local dt:', local_dt)
-epoch = to_epoch(local_dt)
-print('Epoch:', epoch)
-print('Convert to local:', to_datetime(epoch=epoch).astimezone(tz_pdt))
-print('Convert to UTC:', to_datetime(epoch=epoch).astimezone(timezone.utc))
+print('Using iso8601 package to convert from string')
+print(iso8601.parse_date('2023-02-08 13:05:00-07:00'))
+print(iso8601.parse_date('2023-02-08 13:05:00+00:00'))
+print(iso8601.parse_date('2023-02-08 13:05:00Z'))

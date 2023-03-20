@@ -1,0 +1,661 @@
+# An example of creating SiteWise resources using CloudFormation. This template creates:
+#  - Three AssetModels (Building, Room, Scale) connected via a hierarchy
+#  - Assets for each of the AssetModels
+#  - A Lambda to generate Asset Measurement data every minute
+#  - An IoT Events AlarmModel to monitor a Building's metric
+#  - A Portal/Project/Dashboard to view Asset Property values and Alarm State
+#  - An IAM User to use for viewing the Portal
+#
+# The output of this CFN template contains all the information needed to login to the Portal.
+#
+# Running this template using CLI:
+# aws cloudformation create-stack --stack-name SWFactoryDemo --template-body 'file://iotsitewise_factory_demo.yaml' --capabilities CAPABILITY_IAM
+# aws cloudformation wait stack-create-complete --stack-name SWFactoryDemo
+# aws cloudformation describe-stacks --stack-name SWFactoryDemo --query 'Stacks[].Outputs' --output text
+
+Description: Demonstration of monitoring a factory using SiteWise
+Parameters:
+  NamePrefix:
+    Type: String
+    Default: TestFactory
+    Description: Name prefix for all resources
+  AdminPassword:
+    Type: String
+    Default: testPassword123
+    Description: Password for accessing the Portal
+
+Resources:
+  ScaleAssetModel:
+    Type: AWS::IoTSiteWise::AssetModel
+    Properties:
+      AssetModelName: !Sub "${NamePrefix}-Scale"
+      AssetModelDescription: Raw weight measurements
+      AssetModelProperties:
+        - LogicalId: weight_oz_prop
+          Name: weight_oz
+          DataType: DOUBLE
+          Unit: ounces
+          Type:
+            TypeName: Measurement
+        - LogicalId: weight_g_prop
+          Name: weight_g
+          DataType: DOUBLE
+          Unit: grams
+          Type:
+            TypeName: Transform
+            Transform:
+              Expression: 'oz * 28.34952'
+              Variables:
+                - Name: oz
+                  Value:
+                    PropertyLogicalId: weight_oz_prop
+        - LogicalId: avg_weight_g_prop
+          Name: avg_weight_g
+          DataType: DOUBLE
+          Unit: grams
+          Type:
+            TypeName: Metric
+            Metric:
+              Expression: avg(g)
+              Variables:
+                - Name: g
+                  Value:
+                    PropertyLogicalId: weight_g_prop
+              Window:
+                Tumbling:
+                  Interval: 1m
+
+  RoomAssetModel:
+    Type: AWS::IoTSiteWise::AssetModel
+    Properties:
+      AssetModelName: !Sub "${NamePrefix}-WeightRoom"
+      AssetModelDescription: Room with multiple scales
+      AssetModelProperties:
+        - LogicalId: room_max_weight_g_prop
+          Name: max_weight_g
+          DataType: DOUBLE
+          Unit: grams
+          Type:
+            TypeName: Metric
+            Metric:
+              Expression: max(g)
+              Variables:
+                - Name: g
+                  Value:
+                    PropertyLogicalId: avg_weight_g_prop
+                    HierarchyLogicalId: scale_models_hierarchy
+              Window:
+                Tumbling:
+                  Interval: 1m
+      AssetModelHierarchies:
+        - LogicalId: scale_models_hierarchy
+          Name: scale_models
+          ChildAssetModelId: !Ref ScaleAssetModel
+
+  BuildingAssetModel:
+    Type: AWS::IoTSiteWise::AssetModel
+    Properties:
+      AssetModelName: !Sub "${NamePrefix}-Building"
+      AssetModelDescription: Building with rooms
+      AssetModelProperties:
+        - LogicalId: building_max_weight_g_prop
+          Name: max_weight_g
+          DataType: DOUBLE
+          Unit: grams
+          Type:
+            TypeName: Metric
+            Metric:
+              Expression: max(g)
+              Variables:
+                - Name: g
+                  Value:
+                    PropertyLogicalId: room_max_weight_g_prop
+                    HierarchyLogicalId: room_models_hierarchy
+              Window:
+                Tumbling:
+                  Interval: 1m
+        - LogicalId: building_max_weight_threshold_prop
+          Name: weight_threshold_g
+          DataType: DOUBLE
+          Unit: grams
+          Type:
+            TypeName: Attribute
+            Attribute:
+              DefaultValue: 100
+      AssetModelCompositeModels:
+        - Name: weight_alarm
+          Type: AWS/ALARM
+          CompositeModelProperties:
+            - LogicalId: weight_alarm_type_prop
+              Name: AWS/ALARM_TYPE
+              DataType: STRING
+              Type:
+                TypeName: Attribute
+                Attribute:
+                  DefaultValue: IOT_EVENTS
+            - LogicalId: weight_alarm_source_prop
+              Name: AWS/ALARM_SOURCE
+              DataType: STRING
+              Type:
+                TypeName: Attribute
+                Attribute:
+                  DefaultValue: !Sub "arn:${AWS::Partition}:iotevents:${AWS::Region}:${AWS::AccountId}:alarmModel/${NamePrefix}-AlarmModel"
+            - LogicalId: weight_alarm_state_prop
+              Name: AWS/ALARM_STATE
+              DataType: STRUCT
+              DataTypeSpec: AWS/ALARM_STATE
+              Type:
+                TypeName: Measurement
+      AssetModelHierarchies:
+        - LogicalId: room_models_hierarchy
+          Name: room_models
+          ChildAssetModelId: !Ref RoomAssetModel
+
+  Scale1:
+    Type: AWS::IoTSiteWise::Asset
+    Properties:
+      AssetModelId: !Ref ScaleAssetModel
+      AssetName: !Sub "${NamePrefix}-Scale-1"
+      AssetProperties:
+        - LogicalId: weight_oz_prop
+          Alias: "/factory/room/1/scale/1/meas/weight"
+
+  Scale2:
+    Type: AWS::IoTSiteWise::Asset
+    Properties:
+      AssetModelId: !Ref ScaleAssetModel
+      AssetName: !Sub "${NamePrefix}-Scale-2"
+      AssetProperties:
+        - LogicalId: weight_oz_prop
+          Alias: "/factory/room/1/scale/2/meas/weight"
+
+  Scale3:
+    Type: AWS::IoTSiteWise::Asset
+    Properties:
+      AssetModelId: !Ref ScaleAssetModel
+      AssetName: !Sub "${NamePrefix}-Scale-3"
+      AssetProperties:
+        - LogicalId: weight_oz_prop
+          Alias: "/factory/room/2/scale/3/meas/weight"
+
+  Scale4:
+    Type: AWS::IoTSiteWise::Asset
+    Properties:
+      AssetModelId: !Ref ScaleAssetModel
+      AssetName: !Sub "${NamePrefix}-Scale-4"
+      AssetProperties:
+        - LogicalId: weight_oz_prop
+          Alias: "/factory/room/2/scale/4/meas/weight"
+
+  Room1:
+    Type: AWS::IoTSiteWise::Asset
+    Properties:
+      AssetModelId: !Ref RoomAssetModel
+      AssetName: !Sub "${NamePrefix}-Room-1"
+      AssetHierarchies:
+        - ChildAssetId: !Ref Scale1
+          LogicalId: scale_models_hierarchy
+        - ChildAssetId: !Ref Scale2
+          LogicalId: scale_models_hierarchy
+
+  Room2:
+    Type: AWS::IoTSiteWise::Asset
+    Properties:
+      AssetModelId: !Ref RoomAssetModel
+      AssetName: !Sub "${NamePrefix}-Room-2"
+      AssetHierarchies:
+        - ChildAssetId: !Ref Scale3
+          LogicalId: scale_models_hierarchy
+        - ChildAssetId: !Ref Scale4
+          LogicalId: scale_models_hierarchy
+
+  MainBuilding:
+    Type: AWS::IoTSiteWise::Asset
+    Properties:
+      AssetModelId: !Ref BuildingAssetModel
+      AssetName: !Sub "${NamePrefix}-Main-Building"
+      AssetHierarchies:
+        - ChildAssetId: !Ref Room1
+          LogicalId: room_models_hierarchy
+        - ChildAssetId: !Ref Room2
+          LogicalId: room_models_hierarchy
+
+  MeasurementGenRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+      - PolicyName: SiteWiseAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: iotsitewise:BatchPutAssetPropertyValue
+            Resource: '*'
+      - PolicyName: LetCloudFormationManageLogGroups
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Deny
+            Action: logs:CreateLogGroup
+            Resource: '*'
+
+  # Lambda function for generating sample measurement data
+  MeasurementGenLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.8
+      Role: !GetAtt MeasurementGenRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import os
+          import random
+          from dateutil.parser import parse
+          def gen_values():
+              return (('/factory/room/1/scale/1/meas/weight', random.expovariate(0.5)),
+                      ('/factory/room/1/scale/2/meas/weight', random.expovariate(0.5)),
+                      ('/factory/room/2/scale/3/meas/weight', random.expovariate(0.5)),
+                      ('/factory/room/2/scale/4/meas/weight', random.expovariate(0.5)))
+          def create_entry(entry_id, timestamp_sec, property_alias, property_value):
+              return {
+                  'entryId': str(entry_id),
+                  'propertyAlias': property_alias,
+                  'propertyValues': [{'value': {'doubleValue': property_value},
+                                      'timestamp': {'timeInSeconds': timestamp_sec}}]}
+          def handler(event, context):
+              print('Event:', event)
+              region = os.environ["AWS_REGION"]
+              ts_epoch = int(parse(event['time']).replace(second=0).timestamp())
+              entries = [create_entry(idx, ts_epoch, prop_alias, prop_value)
+                         for idx, (prop_alias, prop_value) in enumerate(gen_values())]
+              print('Sending values to Sitewise:', entries)
+              sitewise_client = boto3.client('iotsitewise', region_name=region)
+              response = sitewise_client.batch_put_asset_property_value(entries=entries)
+              print('Response:', response)
+
+  MeasurementGenLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${MeasurementGenLambda}"
+      RetentionInDays: 1
+
+  MeasurementGenInvokerRule:
+    # Need to wait for the Assets to be created with their aliases (otherwise the data will go to
+    # un-associated data streams and the Assets will fail to set the aliases on their properties)
+    DependsOn:
+      - Scale1
+      - Scale2
+      - Scale3
+      - Scale4
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: 'rate(1 minute)'
+      State: ENABLED
+      Targets:
+        - Id: 1
+          Arn: !GetAtt MeasurementGenLambda.Arn
+
+  MeasurementGenInvokerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref MeasurementGenLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MeasurementGenInvokerRule.Arn
+
+  ModelPropertyIdsRetrieverLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+      - PolicyName: SiteWiseAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: iotsitewise:DescribeAssetModel
+            Resource: '*'
+      - PolicyName: LetCloudFormationManageLogGroups
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Deny
+            Action: logs:CreateLogGroup
+            Resource: '*'
+
+  # This Lambda is for a Custom CFN resource that can be used to retrieve all the Property IDs
+  # in a given AssetModel. The outputs of this CFN function (custom resource) is a mapping from
+  # PropertyNames to PropertyIds.
+  #
+  # This is used to create the AlarmModel and Portal Dashboards which require AssetModel, Asset
+  # and Property IDs in their definitions.
+  #
+  # Note since we convert property name/Ids to a CFN return value, the property names must
+  # conform to CFN's definition of a valid name
+  ModelPropertyIdsRetrieverLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.8
+      Role: !GetAtt ModelPropertyIdsRetrieverLambdaRole.Arn
+      Code:
+        ZipFile: |
+          import boto3
+          import hashlib
+          import json
+          from urllib.request import Request, urlopen
+          def get_physical_resource_id(event):
+            if 'PhysicalResourceId' in event:
+              return event['PhysicalResourceId']
+            else:
+              combined = '{}-{}'.format(event['StackId'], event['LogicalResourceId'])
+              hex_str = hashlib.md5(combined.encode('utf-8')).hexdigest()
+              return '{}-{}'.format(event['LogicalResourceId'], hex_str[0:12])
+          def handler(event, context):
+            print('Event:', event)
+            response_body = {
+              'Status': 'SUCCESS',
+              'PhysicalResourceId': get_physical_resource_id(event),
+              'StackId': event['StackId'],
+              'RequestId': event['RequestId'],
+              'LogicalResourceId': event['LogicalResourceId'],
+              'Data': {},
+            }
+            try:
+              if event['RequestType'] != 'Delete':
+                  sitewise = boto3.client('iotsitewise')
+                  asset_model_id = event['ResourceProperties']['AssetModelId']
+                  asset_model = sitewise.describe_asset_model(assetModelId=asset_model_id)
+                  data = dict((p['name'], p['id']) for p in asset_model['assetModelProperties'])
+                  data.update((f"{cm['name']}_{p['name']}".replace('/', '_'), p['id'])
+                              for cm in asset_model.get('assetModelCompositeModels', [])
+                              for p in cm['properties'])
+                  response_body['Status'] = 'SUCCESS'
+                  response_body['Data'] = data
+            except Exception as e:
+              response_body['Status'] = 'FAILED'
+              response_body['Reason'] = str(e)
+            print('Response:', response_body)
+            json_response_body = json.dumps(response_body)
+            data_response_body = json_response_body.encode('utf8')
+            headers = {
+                'content-type': 'application/json',
+                'content-length': str(len(json_response_body))
+            }
+            request = Request(event['ResponseURL'], method='PUT', data=data_response_body, headers=headers)
+            with urlopen(request) as response:
+                print(response.read())
+
+  ModelPropertyIdsRetrieverLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ModelPropertyIdsRetrieverLambda}"
+      RetentionInDays: 1
+
+  BuildingAssetModelPropertyIds:
+    Type: Custom::AssetModelPropertyIds
+    Properties:
+        ServiceToken: !GetAtt ModelPropertyIdsRetrieverLambda.Arn
+        AssetModelId: !Ref BuildingAssetModel
+
+  IoTEventsAlarmModelRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: AssumeRole for IoT Events to use for sending data
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Action: sts:AssumeRole
+          Effect: Allow
+          Principal:
+            Service:
+            - iotevents.amazonaws.com
+      Policies:
+      - PolicyName: IoTEventsPermissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - iotsitewise:BatchPutAssetPropertyValue
+            Resource: '*'
+
+  BuildingAlarmModel:
+    Type: AWS::IoTEvents::AlarmModel
+    Properties:
+      AlarmModelName: !Sub "${NamePrefix}-AlarmModel"
+      RoleArn: !GetAtt IoTEventsAlarmModelRole.Arn
+      Severity: 5
+      AlarmRule:
+        SimpleRule:
+          InputProperty: !Sub
+            - '$sitewise.assetModel.`${AssetModelId}`.`${MonitoredPropertyId}`.propertyValue.value'
+            - AssetModelId: !Ref BuildingAssetModel
+              MonitoredPropertyId: !GetAtt BuildingAssetModelPropertyIds.max_weight_g
+          ComparisonOperator: GREATER
+          Threshold: !Sub
+            - '$sitewise.assetModel.`${AssetModelId}`.`${ThresholdPropertyId}`.propertyValue.value'
+            - AssetModelId: !Ref BuildingAssetModel
+              ThresholdPropertyId: !GetAtt BuildingAssetModelPropertyIds.weight_threshold_g
+      AlarmCapabilities:
+        AcknowledgeFlow:
+            Enabled: True
+        InitializationConfiguration:
+            DisabledOnInitialization: False
+      AlarmEventActions:
+        AlarmActions:
+          - IotSiteWise:
+              AssetId: !Sub
+                - '$sitewise.assetModel.`${AssetModelId}`.`${MonitoredPropertyId}`.assetId'
+                - AssetModelId: !Ref BuildingAssetModel
+                  MonitoredPropertyId: !GetAtt BuildingAssetModelPropertyIds.max_weight_g
+              PropertyId: !Sub
+                - "'${AlarmStatePropertyId}'"
+                - AlarmStatePropertyId: !GetAtt BuildingAssetModelPropertyIds.weight_alarm_AWS_ALARM_STATE
+
+  SiteWiseMonitorServiceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      Description: Service Role for SW Monitor
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Action: sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service: monitor.iotsitewise.amazonaws.com
+      Policies:
+        - PolicyName: SiteWiseMonitorServicePortalPolicy
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+            - Action:
+                - iotsitewise:*AccessPolicy
+                - iotsitewise:*Dashboard*
+                - iotsitewise:*Project*
+                - iotsitewise:BatchPutAssetPropertyValue
+                - iotsitewise:DescribeAsset
+                - iotsitewise:DescribeAssetModel
+                - iotsitewise:DescribeAssetProperty
+                - iotsitewise:GetAssetProperty*
+                - iotsitewise:ListAccessPolicies
+                - iotsitewise:ListAssets
+                - iotsitewise:ListAssetModels
+                - iotsitewise:ListAssetRelationships
+                - iotsitewise:ListAssociatedAssets
+                - iotsitewise:UpdateAssetModel
+                - sso-directory:DescribeUsers
+                - sso-directory:DescribeUser
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - iotevents:BatchAcknowledgeAlarm
+              - iotevents:BatchSnoozeAlarm
+              - iotevents:BatchEnableAlarm
+              - iotevents:BatchDisableAlarm
+              - iotevents:CreateAlarmModel
+              - iotevents:DescribeAlarmModel
+              - iotevents:DeleteAlarmModel
+              - iotevents:ListTagsForResource
+              - iotevents:TagResource
+              - iotevents:UpdateAlarmModel
+              Effect: Allow
+              Resource: '*'
+            - Action:
+              - iam:PassRole
+              Condition:
+                StringEquals:
+                  iam:PassedToService:
+                  - iotevents.amazonaws.com
+              Effect: Allow
+              Resource: '*'
+
+  MonitorPortalAdminUser:
+    Type: AWS::IAM::User
+    Properties:
+      LoginProfile:
+        Password: !Ref AdminPassword
+        PasswordResetRequired: false  # Set to false since this is for testing/demo purposes only
+      ManagedPolicyArns:
+        - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSIoTSiteWiseMonitorPortalAccess"
+      Policies:
+        - PolicyName: AdditionalPortalAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iotsitewise:DescribePortal
+                  - iotsitewise:ListPortals
+                  - iotsitewise:DescribeStorageConfiguration
+                  - sso:DescribeRegisteredRegions
+                Resource: '*'
+
+  MonitorPortal:
+    Type: AWS::IoTSiteWise::Portal
+    Properties:
+      PortalContactEmail: 'admin@test.com'
+      PortalDescription: Monitor Portal for testing
+      PortalName: !Sub "${NamePrefix}-Portal"
+      RoleArn: !GetAtt SiteWiseMonitorServiceRole.Arn
+      PortalAuthMode: IAM
+
+  MainBuildingProject:
+    Type: AWS::IoTSiteWise::Project
+    Properties:
+      AssetIds:
+        - !Ref MainBuilding
+      PortalId: !Ref MonitorPortal
+      ProjectDescription: MainBuilding project
+      ProjectName: !Sub "${NamePrefix}-Project-Main-Building"
+
+  MonitorPortalAdminUserAccessPolicy:
+    Type: AWS::IoTSiteWise::AccessPolicy
+    Properties:
+      AccessPolicyIdentity:
+        IamUser:
+          arn: !GetAtt MonitorPortalAdminUser.Arn
+      AccessPolicyPermission: ADMINISTRATOR
+      AccessPolicyResource:
+        Portal:
+          id: !Ref MonitorPortal
+
+  MainBuildingProjectAdminUserAccessPolicy:
+    Type: AWS::IoTSiteWise::AccessPolicy
+    Properties:
+      AccessPolicyIdentity:
+        IamUser:
+          arn: !GetAtt MonitorPortalAdminUser.Arn
+      AccessPolicyPermission: ADMINISTRATOR
+      AccessPolicyResource:
+        Project:
+          id: !Ref MainBuildingProject
+
+  TestDashboard:
+    Type: AWS::IoTSiteWise::Dashboard
+    Properties:
+      ProjectId: !Ref MainBuildingProject
+      DashboardName: !Sub "${NamePrefix}-Dashboard"
+      DashboardDescription: Factory Building-1 Dashboard
+      DashboardDefinition: !Sub
+        - '{
+            "widgets": [
+              {
+                "type": "sc-line-chart",
+                "title": "Building-1 Weight",
+                "x": 0,
+                "y": 0,
+                "height": 3,
+                "width": 3,
+                "metrics": [
+                  {
+                    "type": "iotsitewise",
+                    "label": "Weight (g)",
+                    "assetId": "${AssetId}",
+                    "propertyId": "${BuildingWeightPropertyId}"
+                  }
+                ]
+              },
+              {
+                "type": "sc-status-grid",
+                "title": "Building-1 Weight Alarm",
+                "x": 3,
+                "y": 0,
+                "height": 3,
+                "width": 3,
+                "metrics": [
+                  {
+                    "type": "iotsitewise",
+                    "label": "weight_g_max",
+                    "assetId": ${AssetId},
+                    "propertyId": ${MonitoredPropertyId},
+                    "dataType": "DOUBLE"
+                  }
+                ],
+                "alarms": [
+                  {
+                    "type": "iotsitewise",
+                    "label": "weight_alarm",
+                    "assetId": ${AssetId},
+                    "alarmStatePropertyId": ${AlarmStatePropertyId},
+                    "inputPropertyId": ${MonitoredPropertyId},
+                    "thresholdPropertyId": ${ThresholdPropertyId},
+                    "severity": 5
+                  }
+                ]
+              }
+            ]
+          }'
+        - AssetId: !Ref MainBuilding
+          BuildingWeightPropertyId: !GetAtt BuildingAssetModelPropertyIds.max_weight_g
+          AlarmStatePropertyId: !GetAtt BuildingAssetModelPropertyIds.weight_alarm_AWS_ALARM_STATE
+          MonitoredPropertyId: !GetAtt BuildingAssetModelPropertyIds.max_weight_g
+          ThresholdPropertyId: !GetAtt BuildingAssetModelPropertyIds.weight_threshold_g
+
+Outputs:
+  PortalUrl:
+    Value: !GetAtt MonitorPortal.PortalStartUrl
+  AccountId:
+    Value: !Ref AWS::AccountId
+  AdminUser:
+    Value: !Ref MonitorPortalAdminUser
+  AdminPass:
+    Value: !Ref AdminPassword
