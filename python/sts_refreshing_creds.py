@@ -37,15 +37,15 @@ def test_refreshing_session(session):
     sqs = session.resource('sqs')
     count = 1
     while True:
-        print(f'{count} minutes - {[q for q in sqs.queues.all()]}')
+        print(f"{count} minutes - {[q.url.split('/')[-1] for q in sqs.queues.all()]}")
         time.sleep(60)
         count += 1
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
-@click.option('-a', '--role-arn', help='The IAM role ARN')
+@click.option('-a', '--role-arn', help='The IAM role ARN', required=True)
 @click.option('-s', '--role-session-name', help='The role session name')
-@click.option('-r', '--region-name', help='Region name')
+@click.option('-r', '--region-name', help='Region name', required=True)
 def main(role_arn, role_session_name, region_name):
     if 'AWS_ACCESS_KEY_ID' not in os.environ or 'AWS_SECRET_ACCESS_KEY' not in os.environ:
         sys.exit('Missing credential env variables')
