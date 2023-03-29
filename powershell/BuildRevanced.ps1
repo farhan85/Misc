@@ -80,12 +80,12 @@ if ($response.ToUpper() -ne 'Y') {
 Write-Host "Downloading patches file"
 $patchesFile = "revanced-patches-${PatchesVersion}.jar"
 $patchesUrl = "https://github.com/revanced/revanced-patches/releases/download/v${PatchesVersion}/${patchesFile}"
-Invoke-WebRequest -Uri $patchesUrl -OutFile $patchesFile
+Invoke-WebRequest -Uri $patchesUrl -OutFile $patchesFile | Out-Host
 
 Write-Host "Downloading integrations file"
 $integrationsFile = "revanced-integrations-${IntegrationsVersion}.apk"
 $integrationsUrl = "https://github.com/revanced/revanced-integrations/releases/download/v${IntegrationsVersion}/${integrationsFile}"
-Invoke-WebRequest -Uri $integrationsUrl -OutFile $integrationsFile
+Invoke-WebRequest -Uri $integrationsUrl -OutFile $integrationsFile | Out-Host
 
 Write-Host "Patching $YoutubeApk"
 java -jar revanced-cli.jar `
@@ -93,7 +93,8 @@ java -jar revanced-cli.jar `
     --bundle $patchesFile `
     --merge $integrationsFile `
     --apk $YoutubeApk `
-    --out $OutFile
+    --out $OutFile `
+    | Out-Host
 
 Write-Host "Installing on phone"
 adb install $OutFile
