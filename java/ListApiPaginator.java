@@ -24,8 +24,9 @@ import static com.google.common.base.Preconditions.checkNotNull;
  *                                    cloudWatchClient::listMetrics,
  *                                    ListMetricsResult::getMetrics,
  *                                    ListMetricsResult::getNextToken);
- * List<Metric> metrics = paginator.stream()
- *                                 .collect(Collectors.toList());
+ * List<String> metricNames = paginator.stream()
+ *                                     .map(Metric::metricName)
+ *                                     .collect(Collectors.toList());
  * </pre>
  */
 public class ListApiPaginator<ListApiRequest, ListApiResult, Item, Token> {
@@ -59,23 +60,23 @@ public class ListApiPaginator<ListApiRequest, ListApiResult, Item, Token> {
 
         @Override
         public boolean hasNext() {
-            return currentItems == null        // Haven't made the first API call yet
-                    || !currentItems.isEmpty() // Still have items from the last API call to return
-                    || nextToken != null;      // Still need to make more API calls
+            if (currentItems == null) {
+                // Haven't made the first API call yet
+                currentItems = new ArrayDeque<>();
+                loadNextBatch();
+            } else if (currentItems.isEmpty() && nextToken != null) {
+                // Still need to make more API calls
+                loadNextBatch();
+            }
+            return !currentItems.isEmpty();
         }
 
         @Override
         public Item next() {
-            if (currentItems == null) {
-                currentItems = new ArrayDeque<>();
-            }
-            if (currentItems.isEmpty()) {
-                getNextBatch();
-            }
             return currentItems.remove();
         }
 
-        private void getNextBatch() {
+        private void loadNextBatch() {
             final ListApiRequest request = listRequestGenerator.apply(nextToken);
             final ListApiResult result = listApiCall.apply(request);
             nextToken = tokenExtractor.apply(result);
