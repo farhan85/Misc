@@ -57,20 +57,29 @@ param(
     [string][Alias("o")]$OutFile="Youtube_Patched.apk"
 )
 
-Write-Host @"
-Check if the release notes contains a new Youtube verson from here:
-https://github.com/revanced/revanced-patches/releases
-Look for "youtube: bump compatibility to"
-If there's a new version, then download the specific Youtube apk from APKMirror/APKPure.
-
-Connect your phone:
-- Enable USB debugging:
-    Settings > Developer options > USB Debugging (turn on)
-- Verify:
-    adb start-server
-    adb devices
-
-"@
+$response = Read-Host "Retrieve patches.json file to find the required Youtube version? [y/Y]"
+if ($response.ToUpper() -eq 'Y') {
+  Write-Host "Dowloading patches.json file"
+  $patchesJsonUrl = "https://github.com/revanced/revanced-patches/releases/download/v${PatchesVersion}/patches.json"
+  $patchesJson = Invoke-WebRequest -Uri $patchesJsonUrl  | ConvertFrom-Json
+  $versionSet = New-Object System.Collections.Generic.HashSet[string]
+  foreach ($item in $patchesJson) {
+    foreach ($package in $item.compatiblePackages) {
+      if ($package.name -eq "com.google.android.youtube") {
+        foreach ($version in $package.versions) {
+          [void] $versionSet.add($version)
+        }
+      }
+    }
+  }
+  $versionList = [System.Collections.ArrayList]@($versionSet)
+  $versionList = $versionList | Sort-Object -Descending
+  $latestVersion = $versionList[0]
+  Write-Output "Required Youtube version: $latestVersion"
+  Write-Output "Download the Youtube apk from APKMirror/APKPure:"
+  Write-Output "https://duckduckgo.com/?q=youtube+${latestVersion}+apkpure"
+  exit
+}
 
 $response = Read-Host "Have you downloaded the apk file and updated the version numbers in the script? [y/Y]"
 if ($response.ToUpper() -ne 'Y') {
@@ -95,6 +104,20 @@ java -jar revanced-cli.jar `
     --apk $YoutubeApk `
     --out $OutFile `
     | Out-Host
+
+Write-Host @"
+Connect your phone:
+- Enable USB debugging:
+    Settings > Developer options > USB Debugging (turn on)
+- Verify:
+    adb start-server
+    adb devices
+"@
+
+$response = Read-Host "Is your phone connected and ADB server is running? [y/Y]"
+if ($response.ToUpper() -ne 'Y') {
+  exit
+}
 
 Write-Host "Installing on phone"
 adb install $OutFile
