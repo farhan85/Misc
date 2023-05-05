@@ -12,11 +12,17 @@ Prequisites:
 - Youtube apk is downloaded
 - adb is installed
 
+.PARAMETER RevancedExtended
+Apply Revanced Extended patches
+
 .PARAMETER PatchesVersion
 The ReVanced patches version to retrieve.
 
 .PARAMETER IntegrationsVersion
 The ReVanced integrations version to retrieve.
+
+.PARAMETER CliVersion
+The ReVanced CLI version to retrieve.
 
 .PARAMETER YoutubeApk
 Filename of the YouTube apk file.
@@ -31,13 +37,10 @@ None. You cannot pipe objects to this command.
 None. Script progress is output to terminal.
 
 .EXAMPLE
-BuildRevanced -p 2.166.0 -i 0.100.1 -y YouTube_18.05.40.apk
+BuildRevanced -p 2.166.0 -i 0.100.1 -c 2.20.1 -y YouTube_18.05.40.apk -o Youtube_Patched.apk
 
 .EXAMPLE
-BuildRevanced -p 2.166.0 -i 0.100.1 -y YouTube_18.05.40.apk -o Youtube_Patched.apk
-
-.EXAMPLE
-BuildRevanced -PatchesVersion 2.166.0 -IntegrationsVersion 0.100.1 -YoutubeApk YouTube_18.05.40.apk -OutFile Youtube_Patched.apk
+BuildRevanced -e -p 2.166.0 -i 0.100.1 -c 2.20.1 -y YouTube_18.05.40.apk -o Youtube_Patched.apk
 
 .LINK
 https://github.com/revanced/revanced-cli
@@ -51,16 +54,20 @@ https://github.com/revanced/revanced-integrations
 
 [CmdletBinding(PositionalBinding=$false)]
 param(
+    [switch][Alias("e")]$RevancedExtended,
     [string][Alias("p")]$PatchesVersion="2.166.0",
     [string][Alias("i")]$IntegrationsVersion="0.100.1",
+    [string][Alias("c")]$CliVersion="2.20.1",
     [string][Alias("y")]$YoutubeApk="YouTube_18.05.40.apk",
     [string][Alias("o")]$OutFile="Youtube_Patched.apk"
 )
 
+$organisation = $RevancedExtended ? "inotia00" : "revanced"
+
 $response = Read-Host "Retrieve patches.json file to find the required Youtube version? [y/Y]"
 if ($response.ToUpper() -eq 'Y') {
   Write-Host "Dowloading patches.json file"
-  $patchesJsonUrl = "https://github.com/revanced/revanced-patches/releases/download/v${PatchesVersion}/patches.json"
+  $patchesJsonUrl = "https://github.com/${organisation}/revanced-patches/releases/download/v${PatchesVersion}/patches.json"
   $patchesJson = Invoke-WebRequest -Uri $patchesJsonUrl  | ConvertFrom-Json
   $versionSet = New-Object System.Collections.Generic.HashSet[string]
   foreach ($item in $patchesJson) {
@@ -73,11 +80,9 @@ if ($response.ToUpper() -eq 'Y') {
     }
   }
   $versionList = [System.Collections.ArrayList]@($versionSet)
-  $versionList = $versionList | Sort-Object -Descending
-  $latestVersion = $versionList[0]
+  $latestVersion = @($versionList | Sort-Object -Descending)[0]
   Write-Output "Required Youtube version: $latestVersion"
-  Write-Output "Download the Youtube apk from APKMirror/APKPure:"
-  Write-Output "https://duckduckgo.com/?q=youtube+${latestVersion}+apkpure"
+  Start-Process "https://duckduckgo.com/?q=youtube+${latestVersion}+apkpure"
   exit
 }
 
@@ -86,24 +91,37 @@ if ($response.ToUpper() -ne 'Y') {
   exit
 }
 
-Write-Host "Downloading patches file"
 $patchesFile = "revanced-patches-${PatchesVersion}.jar"
-$patchesUrl = "https://github.com/revanced/revanced-patches/releases/download/v${PatchesVersion}/${patchesFile}"
-Invoke-WebRequest -Uri $patchesUrl -OutFile $patchesFile | Out-Host
-
-Write-Host "Downloading integrations file"
 $integrationsFile = "revanced-integrations-${IntegrationsVersion}.apk"
-$integrationsUrl = "https://github.com/revanced/revanced-integrations/releases/download/v${IntegrationsVersion}/${integrationsFile}"
-Invoke-WebRequest -Uri $integrationsUrl -OutFile $integrationsFile | Out-Host
+$cliFile = "revanced-cli-${CliVersion}-all.jar"
+
+$ProgressPreference = "SilentlyContinue"
+if (-Not (Test-Path $patches_file)) {
+  Write-Host "Downloading patches file"
+  $patchesUrl = "https://github.com/${organisation}/revanced-patches/releases/download/v${PatchesVersion}/${patchesFile}"
+  Invoke-WebRequest -Uri $patchesUrl -OutFile $patchesFile
+}
+
+if (-Not (Test-Path $integrationsFile)) {
+  Write-Host "Downloading integrations file"
+  $integrationsUrl = "https://github.com/${organisation}/revanced-integrations/releases/download/v${IntegrationsVersion}/${integrationsFile}"
+  Invoke-WebRequest -Uri $integrationsUrl -OutFile $integrationsFile
+}
+
+if (-Not (Test-Path $cliFile)) {
+  Write-Host "Downloading patcher CLI file"
+  $cliUrl = "https://github.com/revanced/revanced-cli/releases/download/v${CliVersion}/${cliFile}"
+  Invoke-WebRequest -Uri $cliUrl -OutFile $cliFile
+}
+$ProgressPreference = "Continue"
 
 Write-Host "Patching $YoutubeApk"
-java -jar revanced-cli.jar `
+java -jar $cliFile `
     --clean `
     --bundle $patchesFile `
     --merge $integrationsFile `
     --apk $YoutubeApk `
-    --out $OutFile `
-    | Out-Host
+    --out $OutFile
 
 Write-Host @"
 Connect your phone:
@@ -114,7 +132,7 @@ Connect your phone:
     adb devices
 "@
 
-$response = Read-Host "Is your phone connected and ADB server is running? [y/Y]"
+$response = Read-Host "Phone connected and ADB server running? [y/Y]"
 if ($response.ToUpper() -ne 'Y') {
   exit
 }
