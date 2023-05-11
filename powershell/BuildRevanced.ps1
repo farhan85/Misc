@@ -1,6 +1,6 @@
 <#
 .SYNOPSIS
-Applies ReVanced patches to a given Youtube APK file.
+Applies ReVanced (or Revanced Extended) patches to a given Youtube APK file.
 
 .Description
 Downloads ReVanced patches from GitHub and patches a given Youtube APK file.
@@ -8,9 +8,21 @@ You will need to check the realease notes in GitHub to know which YouTube versio
 This script will download the patches, but you'll have to download the specific YouTube apk.
 
 Prequisites:
-- revanced-cli.jar is located in the same directory
-- Youtube apk is downloaded
+- Youtube apk is downloaded (this script can help find the correct version to use)
 - adb is installed
+
+Example usage:
+
+# 1. Determine the correct Youtube APK version to use (this will output all the version numbers needed)
+PS > BuildRevanced
+
+# 2. Download APK file...
+
+# 3. Patch APK file (supplying the version numbers displayed above)
+PS > BuildRevanced -p 2.166.0 -i 0.100.1 -c 2.20.1 -y YouTube_18.05.40.apk -o Youtube_Patched.apk
+
+# or let the script automatically get the version numbers again
+PS > BuildRevanced -y YouTube_18.05.40.apk -o Youtube_Patched.apk
 
 .PARAMETER RevancedExtended
 Apply Revanced Extended patches
@@ -36,12 +48,6 @@ None. You cannot pipe objects to this command.
 .OUTPUTS
 None. Script progress is output to terminal.
 
-.EXAMPLE
-BuildRevanced -p 2.166.0 -i 0.100.1 -c 2.20.1 -y YouTube_18.05.40.apk -o Youtube_Patched.apk
-
-.EXAMPLE
-BuildRevanced -e -p 2.166.0 -i 0.100.1 -c 2.20.1 -y YouTube_18.05.40.apk -o Youtube_Patched.apk
-
 .LINK
 https://github.com/revanced/revanced-cli
 
@@ -55,19 +61,49 @@ https://github.com/revanced/revanced-integrations
 [CmdletBinding(PositionalBinding=$false)]
 param(
     [switch][Alias("e")]$RevancedExtended,
-    [string][Alias("p")]$PatchesVersion="2.166.0",
-    [string][Alias("i")]$IntegrationsVersion="0.100.1",
-    [string][Alias("c")]$CliVersion="2.20.1",
+    [string][Alias("p")]$PatchesVersion,
+    [string][Alias("i")]$IntegrationsVersion,
+    [string][Alias("c")]$CliVersion,
     [string][Alias("y")]$YoutubeApk="YouTube_18.05.40.apk",
     [string][Alias("o")]$OutFile="Youtube_Patched.apk"
 )
 
 $organisation = $RevancedExtended ? "inotia00" : "revanced"
+$patchesRepo = "$organisation/revanced-patches"
+$integrationsRepo = "$organisation/revanced-integrations"
+$cliRepo = "revanced/revanced-cli"
 
-$response = Read-Host "Retrieve patches.json file to find the required Youtube version? [y/Y]"
-if ($response.ToUpper() -eq 'Y') {
+function Get-LatestVersion {
+  param ($Repo)
+  $releases = "https://api.github.com/repos/${repo}/releases/latest"
+
+  $ProgressPreference = "SilentlyContinue"
+  $tag = (Invoke-WebRequest $releases | ConvertFrom-Json)[0].tag_name
+  $ProgressPreference = "Continue"
+  return $tag
+}
+
+if (-Not $PatchesVersion) {
+  $PatchesVersion = (Get-LatestVersion -Repo $patchesRepo).TrimStart("v")
+}
+
+if (-Not $IntegrationsVersion) {
+  $IntegrationsVersion = (Get-LatestVersion -Repo $integrationsRepo).TrimStart("v")
+}
+
+if (-Not $CliVersion) {
+  $CliVersion = (Get-LatestVersion -Repo $cliRepo).TrimStart("v")
+}
+
+Write-Output "Patches version: $PatchesVersion"
+Write-Output "Integrations version: $IntegrationsVersion"
+Write-Output "CLI version: $CliVersion"
+Write-Output "APK file to be patched: $YoutubeApk"
+
+if (-Not $YoutubeApk) {
+  Write-Host "Youtube APK filename not given. Determining the version needed."
   Write-Host "Dowloading patches.json file"
-  $patchesJsonUrl = "https://github.com/${organisation}/revanced-patches/releases/download/v${PatchesVersion}/patches.json"
+  $patchesJsonUrl = "https://github.com/${patchesRepo}/releases/download/v${PatchesVersion}/patches.json"
   $patchesJson = Invoke-WebRequest -Uri $patchesJsonUrl  | ConvertFrom-Json
   $versionSet = New-Object System.Collections.Generic.HashSet[string]
   foreach ($item in $patchesJson) {
@@ -86,8 +122,8 @@ if ($response.ToUpper() -eq 'Y') {
   exit
 }
 
-$response = Read-Host "Have you downloaded the apk file and updated the version numbers in the script? [y/Y]"
-if ($response.ToUpper() -ne 'Y') {
+if (-Not (Test-Path $YoutubeApk)) {
+  Write-Output "ERROR - File not found: $YoutubeApk"
   exit
 }
 
@@ -96,21 +132,21 @@ $integrationsFile = "revanced-integrations-${IntegrationsVersion}.apk"
 $cliFile = "revanced-cli-${CliVersion}-all.jar"
 
 $ProgressPreference = "SilentlyContinue"
-if (-Not (Test-Path $patches_file)) {
+if (-Not (Test-Path $patchesFile)) {
   Write-Host "Downloading patches file"
-  $patchesUrl = "https://github.com/${organisation}/revanced-patches/releases/download/v${PatchesVersion}/${patchesFile}"
+  $patchesUrl = "https://github.com/${patchesRepo}/releases/download/v${PatchesVersion}/${patchesFile}"
   Invoke-WebRequest -Uri $patchesUrl -OutFile $patchesFile
 }
 
 if (-Not (Test-Path $integrationsFile)) {
   Write-Host "Downloading integrations file"
-  $integrationsUrl = "https://github.com/${organisation}/revanced-integrations/releases/download/v${IntegrationsVersion}/${integrationsFile}"
+  $integrationsUrl = "https://github.com/${integrationsRepo}/releases/download/v${IntegrationsVersion}/${integrationsFile}"
   Invoke-WebRequest -Uri $integrationsUrl -OutFile $integrationsFile
 }
 
 if (-Not (Test-Path $cliFile)) {
   Write-Host "Downloading patcher CLI file"
-  $cliUrl = "https://github.com/revanced/revanced-cli/releases/download/v${CliVersion}/${cliFile}"
+  $cliUrl = "https://github.com/${cliRepo}/releases/download/v${CliVersion}/${cliFile}"
   Invoke-WebRequest -Uri $cliUrl -OutFile $cliFile
 }
 $ProgressPreference = "Continue"
