@@ -27,6 +27,9 @@ PS > BuildRevanced -y YouTube_18.05.40.apk -o Youtube_Patched.apk
 .PARAMETER RevancedExtended
 Apply Revanced Extended patches
 
+.PARAMETER RexPatches
+Apply YT-Revanced ReX patches
+
 .PARAMETER PatchesVersion
 The ReVanced patches version to retrieve.
 
@@ -61,6 +64,7 @@ https://github.com/revanced/revanced-integrations
 [CmdletBinding(PositionalBinding=$false)]
 param(
     [switch][Alias("e")]$RevancedExtended,
+    [switch][Alias("x")]$RexPatches,
     [string][Alias("p")]$PatchesVersion,
     [string][Alias("i")]$IntegrationsVersion,
     [string][Alias("c")]$CliVersion,
@@ -68,10 +72,19 @@ param(
     [string][Alias("o")]$OutFile="Youtube_Patched.apk"
 )
 
-$organisation = $RevancedExtended ? "inotia00" : "revanced"
-$patchesRepo = "$organisation/revanced-patches"
-$integrationsRepo = "$organisation/revanced-integrations"
-$cliRepo = "revanced/revanced-cli"
+if ($RevancedExtended) {
+  $patchesRepo = "inotia00/revanced-patches"
+  $integrationsRepo = "inotia00/revanced-integrations"
+  $cliRepo = "inotia00/revanced-cli"
+} else if ($RexPatches) {
+  $patchesRepo = "YT-Advanced/ReX-patches"
+  $integrationsRepo = "YT-Advanced/ReX-integrations"
+  $cliRepo = "inotia00/revanced-cli"
+} else {
+  $patchesRepo = "revanced/revanced-patches"
+  $integrationsRepo = "revanced/revanced-integrations"
+  $cliRepo = "revanced/revanced-cli"
+}
 
 function Get-LatestVersion {
   param ($Repo)
