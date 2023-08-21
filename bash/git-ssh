@@ -1,0 +1,20 @@
+#!/usr/bin/env bash
+
+# Converting HTTPS repository to SSH:
+# > git remote -v
+# origin    https://github.com/farhan85/Misc.git (fetch)
+# origin    https://github.com/farhan85/Misc.git (push)
+# > git remote set-url origin git@github.com:farhan85/Misc.git
+# > git remote -v
+# origin    git@github.com:farhan85/Misc.git (fetch)
+# origin    git@github.com:farhan85/Misc.git (push)
+
+
+function cleanup {
+    eval $(ssh-agent -k) &>/dev/null
+}
+trap cleanup EXIT
+
+eval $(ssh-agent) &>/dev/null
+ssh-add -k ${HOME}/.ssh/github/id_rsa &>/dev/null
+git $@
