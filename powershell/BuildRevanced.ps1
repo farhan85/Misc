@@ -165,12 +165,21 @@ if (-Not (Test-Path $cliFile)) {
 $ProgressPreference = "Continue"
 
 Write-Host "Patching $YoutubeApk"
-java -jar $cliFile `
-    --clean `
-    --bundle $patchesFile `
-    --merge $integrationsFile `
-    --apk $YoutubeApk `
-    --out $OutFile
+if ($CliVersion.StartsWith("2")) {
+  java -jar $cliFile `
+      --clean `
+      --bundle $patchesFile `
+      --merge $integrationsFile `
+      --apk $YoutubeApk `
+      --out $OutFile
+} else {
+  java -jar $cliFile patch `
+      --purge `
+      --patch-bundle $patchesFile `
+      --merge $integrationsFile `
+      --out $OutFile `
+      $YoutubeApk
+}
 
 Write-Host @"
 Connect your phone:
