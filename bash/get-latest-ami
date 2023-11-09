@@ -1,11 +1,26 @@
 #!/usr/bin/env bash
 
-# amzn2-* = New AL2
-# amzn-*  = Old AL2012
-# *-ebs = Magnetic disks
-# *-gp2 = SSD disks
+# amzn-*   = AL2012 (Old)
+# *-ebs    = Magnetic disks
+# *-gp2    = SSD disks
 aws ec2 describe-images \
     --owners amazon \
-    --filters "Name=name,Values=amzn2-ami-hvm-*x86_64-ebs" \
+    --filters 'Name=name,Values=amzn-ami-hvm-*-x86_64-gp2' \
+    --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
+    --output text
+
+
+# amzn2-*  = AL2 (Old)
+aws ec2 describe-images \
+    --owners amazon \
+    --filters 'Name=name,Values=amzn2-ami-hvm-*-x86_64-ebs' \
+    --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
+    --output text
+
+
+# al2023-* = AL 2023
+aws ec2 describe-images \
+    --owners amazon \
+    --filters 'Name=name,Values=al2023-ami-2023.*-x86_64' \
     --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
     --output text
