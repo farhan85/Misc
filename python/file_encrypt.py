@@ -40,10 +40,7 @@ def encrypt_file_aes_cbc(input_filename, output_filename, key_encrypter):
         output_file.write(struct.pack('<Q', len(encrypted_key)))
         output_file.write(encrypted_key)
         output_file.write(cipher.iv)
-        while True:
-            chunk = input_file.read(CHUNK_SIZE)
-            if len(chunk) == 0:
-                break
+        for chunk in iter(lambda: input_file.read(CHUNK_SIZE), b''):
             if len(chunk) % 16 != 0:
                 chunk += b' ' * (16 - (len(chunk) % 16))
             output_file.write(cipher.encrypt(chunk))
@@ -59,10 +56,7 @@ def decrypt_file_aes_cbc(input_filename, output_filename, key_decrypter):
 
         key = key_decrypter(enc_key)
         cipher = AES.new(key, AES.MODE_CBC, iv)
-        while True:
-            chunk = input_file.read(CHUNK_SIZE)
-            if len(chunk) == 0:
-                break
+        for chunk in iter(lambda: input_file.read(CHUNK_SIZE), b''):
             output_file.write(cipher.decrypt(chunk))
         output_file.truncate(filesize)
 
