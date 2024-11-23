@@ -5,6 +5,8 @@ import pytz
 from datetime import datetime, timezone
 
 
+#for tz in pytz.all_timezones:
+#    print(tz)
 tz_pst = pytz.timezone('America/Los_Angeles')
 tz_est = pytz.timezone('America/New_York')
 
@@ -41,7 +43,8 @@ print('Convert to UTC:', est_dt.astimezone(timezone.utc))
 print()
 
 print('Buiding datetime from epoch')
-epoch = to_epoch(now)
+epoch = 1732391153
+print('Epoch:', epoch)
 print('Epoch to local datetime:', datetime.fromtimestamp(epoch))
 print('Epoch to UTC datetime:', datetime.fromtimestamp(epoch, tz=timezone.utc))
 print('Epoch to PST datetime:', datetime.fromtimestamp(epoch, tz=tz_pst))
