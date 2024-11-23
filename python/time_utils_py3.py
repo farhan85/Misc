@@ -40,6 +40,13 @@ print('Convert to local:', est_dt.astimezone(tz_pst))
 print('Convert to UTC:', est_dt.astimezone(timezone.utc))
 print()
 
+print('Buiding datetime from epoch')
+epoch = to_epoch(now)
+print('Epoch to local datetime:', datetime.fromtimestamp(epoch))
+print('Epoch to UTC datetime:', datetime.fromtimestamp(epoch, tz=timezone.utc))
+print('Epoch to PST datetime:', datetime.fromtimestamp(epoch, tz=tz_pst))
+print()
+
 print('Buiding datetime from string')
 utc_dt = datetime.strptime('30/12/22 22:35:45', '%d/%m/%y %H:%M:%S').replace(tzinfo=timezone.utc)
 print('Starting date:', utc_dt)
