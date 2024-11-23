@@ -5,7 +5,7 @@ import json
 import graphviz
 
 
-class CloudFormation:
+class CloudFormationParser:
     def __init__(self, cfn_defn):
         self._models = [(res_id, res['Properties'])
                         for res_id, res in cfn_defn['Resources'].items()
@@ -33,7 +33,7 @@ class CloudFormation:
                 for h in a['AssetHierarchies'])
 
 
-class BulkExport:
+class BulkExportParser:
     def __init__(self, bulk_export_defn):
         self.resources = bulk_export_defn
 
@@ -64,10 +64,10 @@ class BulkExport:
 def main(cfn_file, bulk_export_file, name, dot):
     if cfn_file:
         contents = cfn_file.read()
-        resources = CloudFormation(json.loads(contents))
+        resources = CloudFormationParser(json.loads(contents))
     elif bulk_export_file:
         contents = bulk_export_file.read()
-        resources = BulkExport(json.loads(contents))
+        resources = BulkExportParser(json.loads(contents))
     else:
         raise click.UsageError('Must provide either a CloudFormation or BulkExport file')
 
