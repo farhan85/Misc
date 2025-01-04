@@ -1,3 +1,9 @@
+#
+# This may not be a good library to use for rate limiting anymore
+#   https://gist.github.com/justinvanwinkle/d9f04950083c4554835c1a35f9d22dad
+#
+
+
 import time
 from datetime import datetime
 from ratelimiter import RateLimiter
