@@ -61,7 +61,8 @@ def to_property_values(properties, request_entries, response_entries):
         prop_id = entries[entry_id]['propertyId']
         prop_name = prop_names[prop_id]
         response_value = entry.get('assetPropertyValue', default_property_value)
-        prop_val = list(response_value['value'].values())[0]
+        prop_val_type = list(response_value['value'].keys())[0]
+        prop_val = 'null' if prop_val_type == 'nullValue' else response_value['value'][prop_val_type]
         prop_ts = response_value['timestamp']['timeInSeconds']
         prop_qual = response_value['quality']
         property_values.append(PropertyValue(asset_id, prop_id, prop_name, prop_val, prop_ts, prop_qual))

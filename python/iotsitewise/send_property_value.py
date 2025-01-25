@@ -35,6 +35,19 @@ ALARM_OPERATORS = {
 }
 
 
+class NullValue:
+    def __init__(self, value_type):
+        self.value_type = value_type
+
+    @staticmethod
+    def from_str(s):
+        if s.lower().startswith('null-'):
+            value_type = s.split('-')[1].upper()
+            return NullValue(value_type)
+        else:
+            raise ValueError('Not a null value')
+
+
 def epoch_now():
     return int(time.time())
 
@@ -64,6 +77,9 @@ def cast_value(value_str):
         return bool(strtobool(value_str))
     except ValueError: pass
     try:
+        return NullValue.from_str(value_str)
+    except ValueError: pass
+    try:
         return json.dumps(alarm_state_value(value_str))
     except KeyError: pass
     return value_str
@@ -78,6 +94,8 @@ def _create_property_value(value_str):
         return {'integerValue': value}
     elif isinstance(value, float):
         return {'doubleValue': value}
+    elif isinstance(value, NullValue):
+        return {'nullValue': {'valueType': value.value_type}}
     else:
         return {'stringValue': value}
 
@@ -90,7 +108,7 @@ def create_property_value(timestamp_s, value_str):
             'timeInSeconds': timestamp_s,
             'offsetInNanos': 0
         },
-        'quality': 'GOOD'
+        'quality': 'GOOD' if 'nullValue' not in value else 'UNCERTAIN'
     }
 
 
@@ -134,6 +152,7 @@ def custom_doc(f):
         <boolean>            Boolean
         [s]                  <alarm state>
         [s]/[val][op][val]   <alarm state>/<measured value> <alarm operator> <threshold value>
+        null-[type]          Null value for <type> data stream (i.e. null-[d|b|s|i])
         <string>             String (default if the value cannot be parsed)
 
     \b
@@ -155,6 +174,7 @@ def custom_doc(f):
         a/12.0lt30.0         Send alarm value: ACTIVE 12.0 < 30.0
         l/7le9               Send alarm value: LATCHED 7 <= 9
         'test value'         Send string value
+        null-d               Send null value for a double data stream
     """
     f.__doc__ = textwrap.dedent(doc)
     return f
