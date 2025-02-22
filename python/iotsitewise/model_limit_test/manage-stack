@@ -1,0 +1,58 @@
+#!/usr/bin/env bash
+
+cfn_command=
+cfn_wait_command=
+operation=
+if [[ "$1" == "-c" || "$1" == "--create" ]]; then
+    cfn_command='create-stack'
+    cfn_wait_command='stack-create-complete'
+elif [[ "$1" == "-u" || "$1" == "--update" ]]; then
+    cfn_command='update-stack'
+    cfn_wait_command='stack-update-complete'
+elif [[ "$1" == "-l" || "$1" == "--lambdas" ]]; then
+    operation='update-lambdas'
+else
+    echo "Usage: $0 -c,--create|-u,--update|-l,--lambdas"
+    echo "AWS env creds needs to already be set"
+    exit 1
+fi
+
+if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_DEFAULT_REGION" ]]; then
+    echo "Missing AWS env variables"
+    exit 1
+fi
+
+VENV_BIN_DIR='./venv/bin'
+S3_BUCKET='...'
+S3_KEY='iotsitewise_model_limit_test.zip'
+S3_FILENAME="s3://$S3_BUCKET/$S3_KEY"
+REGION=$(python -c "print('${AWS_DEFAULT_REGION}'.title().replace('-', ''))")
+CFN_STACK_NAME="ModelLimitTest${REGION}"
+
+
+set -e
+
+if [[ "$operation" == "update-lambdas" ]]; then
+    rm -rf loadtest/__pycache__
+    $VENV_BIN_DIR/lambda build 1>&2
+    module_lib=$(ls -t dist/ | head -1)
+    aws s3 cp "dist/$module_lib" $S3_FILENAME
+    rm dist/*
+
+    cfn_output=$(aws cloudformation describe-stacks --stack-name $CFN_STACK_NAME --query 'Stacks[0].Outputs[*]' --output text)
+    db_initializer=$(echo "$cfn_output" | awk '/DBInitializerLambdaName/ {print $2}')
+    model_creator=$(echo "$cfn_output" | awk '/ModelCreatorLambdaName/ {print $2}')
+    model_deleter=$(echo "$cfn_output" | awk '/ModelDeleterLambdaName/ {print $2}')
+
+    aws lambda update-function-code --s3-bucket $S3_BUCKET --s3-key $S3_KEY --function-name $db_initializer >/dev/null
+    aws lambda update-function-code --s3-bucket $S3_BUCKET --s3-key $S3_KEY --function-name $model_creator >/dev/null
+    aws lambda update-function-code --s3-bucket $S3_BUCKET --s3-key $S3_KEY --function-name $model_deleter >/dev/null
+
+else
+    set -x
+    aws cloudformation $cfn_command \
+            --capabilities CAPABILITY_IAM \
+            --stack-name $CFN_STACK_NAME \
+            --template-body file://infra.yaml
+    aws cloudformation wait $cfn_wait_command --stack-name $CFN_STACK_NAME
+fi

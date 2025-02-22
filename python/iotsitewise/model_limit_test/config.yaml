@@ -1,0 +1,6 @@
+# Used for building the module file for the Lambda functions
+# We'll use our own script to update all the Lambdas
+
+function_name: sitewise_model_limit_test
+build:
+  source_directories: loadtest

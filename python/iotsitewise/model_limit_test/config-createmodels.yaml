@@ -1,0 +1,9 @@
+# Used for local testing
+
+handler: loadtest/createmodels.handler
+
+environment_variables:
+  DDB_ENDPOINT: 'http://localhost:8000'
+  NEW_MODELS_TABLE: 'new_models'
+  COMPLETED_MODELS_TABLE: 'completed_models'
+  MODELS_TABLE: 'models'

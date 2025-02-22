@@ -1,0 +1,266 @@
+Description: Number of connected AssetModels limit test
+
+Resources:
+  NewModelsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: group
+          AttributeType: N
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: group
+          KeyType: HASH
+        - AttributeName: name
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 20
+        WriteCapacityUnits: 20
+
+  CompletedModelsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: group
+          AttributeType: N
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: group
+          KeyType: HASH
+        - AttributeName: name
+          KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 20
+        WriteCapacityUnits: 20
+
+  ModelsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+        - AttributeName: name
+          AttributeType: S
+      KeySchema:
+        - AttributeName: name
+          KeyType: HASH
+      ProvisionedThroughput:
+        ReadCapacityUnits: 20
+        WriteCapacityUnits: 20
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: lambda.amazonaws.com
+      Policies:
+      - PolicyName: SiteWisePermissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - iotsitewise:CreateAssetModel
+            - iotsitewise:DeleteAssetModel
+            - iotsitewise:DescribeAssetModel
+            Resource: '*'
+      - PolicyName: DynamoDBPermissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:BatchWriteItem
+            - dynamodb:DeleteItem
+            - dynamodb:GetItem
+            - dynamodb:PutItem
+            - dynamodb:Query
+            - dynamodb:Scan
+            - dynamodb:TransactWriteItems
+            Resource:
+            - !GetAtt NewModelsTable.Arn
+            - !GetAtt CompletedModelsTable.Arn
+            - !GetAtt ModelsTable.Arn
+      - PolicyName: LetCloudFormationManageLogGroups
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Deny
+            Action: logs:CreateLogGroup
+            Resource: '*'
+      - PolicyName: AllowWriteCloudWatchLogs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+
+  StepFunctionsExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: states.amazonaws.com
+            Action: sts:AssumeRole
+      Policies:
+        - PolicyName: InvokeLambda
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: lambda:InvokeFunction
+                Resource:
+                - !GetAtt DBInitializerLambda.Arn
+                - !GetAtt ModelCreatorLambda.Arn
+                - !GetAtt ModelDeleterLambda.Arn
+
+  DBInitializerLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: loadtest.initdb.handler
+      Runtime: python3.10
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 600
+      Environment:
+        Variables:
+          NEW_MODELS_TABLE: !Ref NewModelsTable
+          MODELS_TABLE: !Ref ModelsTable
+      Code:
+        # Code will be updated with a separate script
+        ZipFile: 'def handler(event, context): pass'
+
+  ModelCreatorLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: loadtest.createmodels.handler
+      Runtime: python3.10
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 600
+      Environment:
+        Variables:
+          NEW_MODELS_TABLE: !Ref NewModelsTable
+          COMPLETED_MODELS_TABLE: !Ref CompletedModelsTable
+          MODELS_TABLE: !Ref ModelsTable
+      Code:
+        # Code will be updated with a separate script
+        ZipFile: 'def handler(event, context): pass'
+
+  ModelDeleterLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: loadtest.deletemodels.handler
+      Runtime: python3.10
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 600
+      Environment:
+        Variables:
+          COMPLETED_MODELS_TABLE: !Ref CompletedModelsTable
+          MODELS_TABLE: !Ref ModelsTable
+      Code:
+        # Code will be updated with a separate script
+        ZipFile: 'def handler(event, context): pass'
+
+  DBInitializerLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${DBInitializerLambda}"
+      RetentionInDays: 7
+
+  ModelCreatorLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ModelCreatorLambda}"
+      RetentionInDays: 7
+
+  ModelDeleterLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${ModelDeleterLambda}"
+      RetentionInDays: 7
+
+  CreateModelsStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Creates AssetModels",
+          "StartAt": "InitDB",
+          "States": {
+            "InitDB": {
+              "Type": "Task",
+              "Resource": "${DBInitializerLambda.Arn}",
+              "InputPath": "$",
+              "Next": "CreateNextBatch"
+            },
+            "CreateNextBatch": {
+              "Type": "Task",
+              "Resource": "${ModelCreatorLambda.Arn}",
+              "Next": "CheckResult"
+            },
+            "CheckResult": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.finished",
+                  "BooleanEquals": true,
+                  "Next": "Success"
+                }
+              ],
+              "Default": "CreateNextBatch"
+            },
+            "Success": {
+              "Type": "Succeed"
+            }
+          }
+        }
+
+  DeleteModelsStateMachine:
+    Type: AWS::StepFunctions::StateMachine
+    Properties:
+      RoleArn: !GetAtt StepFunctionsExecutionRole.Arn
+      DefinitionString: !Sub |
+        {
+          "Comment": "Deletes AssetModels",
+          "StartAt": "DeleteNextBatch",
+          "States": {
+            "DeleteNextBatch": {
+              "Type": "Task",
+              "Resource": "${ModelDeleterLambda.Arn}",
+              "Next": "CheckResult"
+            },
+            "CheckResult": {
+              "Type": "Choice",
+              "Choices": [
+                {
+                  "Variable": "$.finished",
+                  "BooleanEquals": true,
+                  "Next": "Success"
+                }
+              ],
+              "Default": "DeleteNextBatch"
+            },
+            "Success": {
+              "Type": "Succeed"
+            }
+          }
+        }
+
+Outputs:
+  DBInitializerLambdaName:
+    Value: !Ref DBInitializerLambda
+  ModelCreatorLambdaName:
+    Value: !Ref ModelCreatorLambda
+  ModelDeleterLambdaName:
+    Value: !Ref ModelDeleterLambda
