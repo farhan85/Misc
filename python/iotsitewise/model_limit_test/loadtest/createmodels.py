@@ -12,7 +12,7 @@ NEW_MODELS_TABLE = os.environ['NEW_MODELS_TABLE']
 COMPLETED_MODELS_TABLE = os.environ['COMPLETED_MODELS_TABLE']
 MODELS_TABLE = os.environ['MODELS_TABLE']
 HIERARCHY_PREFIX = 'hierarchy'
-MAX_MODELS_CREATE = 50
+MAX_MODELS_CREATE = 500
 MAX_MODELS_PARALLEL_CREATE = 10
 
 
@@ -44,6 +44,7 @@ async def more_models_to_create(ddb, group):
         'KeyConditionExpression': '#group = :g',
         'ExpressionAttributeValues': { ':g': { 'N': str(group) } },
         'ExpressionAttributeNames': { '#group': 'group' },
+        'Select': 'COUNT'
     }
     response = await ddb.query(**params)
     return response['Count'] > 0

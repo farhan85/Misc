@@ -1,5 +1,6 @@
 {
   "prefix": "LimitTest",
   "num_models": 5,
-  "max_children": 2
+  "max_children": 2,
+  "tree_type": "balanced"
 }

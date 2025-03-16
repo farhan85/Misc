@@ -9,7 +9,7 @@ from dynamodb_json import json_util as json
 
 COMPLETED_MODELS_TABLE = os.environ['COMPLETED_MODELS_TABLE']
 MODELS_TABLE = os.environ['MODELS_TABLE']
-MAX_MODELS_DELETE = 50
+MAX_MODELS_DELETE = 500
 MAX_MODELS_PARALLEL_DELETE = 10
 
 
@@ -41,6 +41,7 @@ async def more_models_to_delete(ddb, group):
         'KeyConditionExpression': '#group = :g',
         'ExpressionAttributeValues': { ':g': { 'N': str(group) } },
         'ExpressionAttributeNames': { '#group': 'group' },
+        'Select': 'COUNT'
     }
     response = await ddb.query(**params)
     return response['Count'] > 0
@@ -96,13 +97,14 @@ async def delete_sitewise_model(semaphore, sitewise, ddb, new_event):
                 model_id,
                 response['ResponseMetadata']['RequestId']))
         except ClientError as e:
-            print('Failed to delete AssetModel. Name={}, ID={}, RequestId={}, Error={} {}'.format(
-                model_name,
-                model_id,
-                e.response['ResponseMetadata']['RequestId'],
-                e.response['Error']['Code'],
-                e.response['Error']['Message']))
-            raise
+            if e.response['Error']['Code'] != 'ResourceNotFoundException':
+                print('Failed to delete AssetModel. Name={}, ID={}, RequestId={}, Error={} {}'.format(
+                    model_name,
+                    model_id,
+                    e.response['ResponseMetadata']['RequestId'],
+                    e.response['Error']['Code'],
+                    e.response['Error']['Message']))
+                raise
 
         await wait_for_model_deleted(sitewise, model_id)
         await mark_model_deleted(ddb, new_event)
