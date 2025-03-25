@@ -2,107 +2,117 @@ import os
 import time
 
 import boto3
-from anytree import Node, PreOrderIter
+import json
 from botocore.exceptions import ClientError
-from dynamodb_json import json_util as json
-from graphlib import TopologicalSorter
+from dynamodb_json import json_util as ddbjson
 
 
-NEW_MODELS_TABLE = os.environ['NEW_MODELS_TABLE']
 MODELS_TABLE = os.environ['MODELS_TABLE']
-DDB_BATCH_SIZE = 25
+DDB_ENDPOINT = os.getenv('DDB_ENDPOINT')
+S3_BUCKET = os.environ['DATA_BUCKET']
+MODELS_FILE_KEY = os.environ['MODELS_FILE_KEY']
+REGION = os.environ['AWS_DEFAULT_REGION']
 
 
-class AssetModelTree:
-    def __init__(self, root_node):
-        self.root_node = root_node
+class Node:
+    def __init__(self, name, parent=None):
+        self.name = name
+        self.children = []
+        if parent:
+            self.parent = parent
+            parent.add_child(self)
 
-    @staticmethod
-    def balanced_tree(prefix, num_models, max_children):
+    def add_child(self, child):
+        self.children.append(child)
+
+
+class BinaryTree:
+    def __init__(self, prefix, num_models):
         root_node = Node(f'{prefix}-1')
-        while root_node.size < num_models:
-            for node in root_node.leaves:
-                for _ in range(max_children):
-                    if root_node.size < num_models:
-                        Node(f'{prefix}-{root_node.size + 1}', parent=node)
-        return AssetModelTree(root_node)
-
-    @classmethod
-    def flat_tree(cls, prefix, num_models):
-        return cls.balanced_tree(prefix, num_models, num_models)
-
-    @classmethod
-    def single_path(cls, prefix, num_models):
-        return cls.balanced_tree(prefix, num_models, 1)
+        self.levels = [[root_node]]
+        node_count = 1
+        while node_count < num_models:
+            curr_level = []
+            for parent in self.levels[-1]:
+                node_count += 1
+                curr_level.append(Node(f'{prefix}-{node_count}', parent=parent))
+                if node_count == num_models:
+                    break
+                node_count += 1
+                curr_level.append(Node(f'{prefix}-{node_count}', parent=parent))
+                if node_count == num_models:
+                    break
+            self.levels.append(curr_level)
 
     def batches(self):
-        graph = TopologicalSorter()
-        for n in PreOrderIter(self.root_node):
-            if n.parent:
-                graph.add(n.parent, n)
-
-        graph.prepare()
-        while graph.is_active():
-            node_group = graph.get_ready()
-            yield list(node_group)
-            graph.done(*node_group)
+        return reversed(self.levels)
 
 
-def batch_put_items(ddb, table_name, items):
-    print(f"Writing {len(items)} entries to '{table_name}' table")
-    for i in range(0, len(items), DDB_BATCH_SIZE):
-        chunk = items[i:i + DDB_BATCH_SIZE]
-        batch_items = {
-            table_name: [{ 'PutRequest': { 'Item': json.dumps(item, as_dict=True) }}
-                         for item in chunk]
-        }
-        time.sleep(0.1)
-        response = ddb.batch_write_item(RequestItems=batch_items)
-        unprocessed = response.get('UnprocessedItems', {})
-        if unprocessed:
-            raise RuntimeError(f'Some items were not written to DDB: {unprocessed}')
+class FlatTree:
+    def __init__(self, prefix, num_models):
+        self.root_node = Node(f'{prefix}-1')
+        self.children = [Node(f'{prefix}-{idx}', parent=self.root_node)
+                         for idx in range(2, num_models + 1)]
+
+    def batches(self):
+        return [self.children, [self.root_node]]
 
 
-def update_db_items(ddb, tree):
-    new_models_items = []
-    models_items = []
+class SinglePath:
+    def __init__(self, prefix, num_models):
+        self.levels = [[Node(f'{prefix}-1')]]
+        for idx in range(2, num_models + 1):
+            parent = self.levels[-1][0]
+            self.levels.append([ Node(f'{prefix}-{idx}', parent=parent) ])
+
+    def batches(self):
+        return reversed(self.levels)
+
+
+class DisconnectedNodes:
+    def __init__(self, prefix, num_models):
+        self.models = [Node(f'{prefix}-{i}') for i in range(num_models)]
+
+    def batches(self):
+        return [self.models]
+
+
+def to_models_obj(tree):
+    models = { 'models': [] }
     for idx, node_group in enumerate(tree.batches()):
         for n in node_group:
-            new_models_items.append({
-                'group': idx,
-                'name': n.name
-            })
-            models_items.append({
+            models['models'].append({
                 'name': n.name,
+                'group': idx,
                 'is_leaf_node': len(n.children) == 0,
                 'sw_id': None,
                 'children': [c.name for c in n.children]
             })
-
-    models_items.append({
-        'name': 'config',
-        'current_group': 0
-    })
-
-    batch_put_items(ddb, NEW_MODELS_TABLE, new_models_items)
-    batch_put_items(ddb, MODELS_TABLE, models_items)
+    return models
 
 
 def handler(event, context):
     prefix = event['prefix']
     num_models = event['num_models']
-    max_children = event.get('max_children', 2)
     tree_type = event['tree_type']
 
-    ddb = boto3.client('dynamodb', endpoint_url=os.getenv('DDB_ENDPOINT'))
+    s3 = boto3.client('s3')
+    ddb = boto3.client('dynamodb', endpoint_url=DDB_ENDPOINT)
 
-    if tree_type == 'balanced':
-        tree = AssetModelTree.balanced_tree(prefix, num_models, max_children)
+    if tree_type == 'binary':
+        tree = BinaryTree(prefix, num_models)
     elif tree_type == 'flat':
-        tree = AssetModelTree.flat_tree(prefix, num_models)
+        tree = FlatTree(prefix, num_models)
     elif tree_type == 'single-path':
-        tree = AssetModelTree.single_path(prefix, num_models)
+        tree = SinglePath(prefix, num_models)
+    elif tree_type == 'disconnected':
+        tree = DisconnectedNodes(prefix, num_models)
     else:
         raise RuntimeError(f'Invalid tree type. Event: {event}')
 
-    update_db_items(ddb, tree)
+    models = to_models_obj(tree)
+    s3.put_object(Body=json.dumps(models), Bucket=S3_BUCKET, Key=MODELS_FILE_KEY , ContentType='application/json')
+    print(f'Updated file s3://{S3_BUCKET}/{MODELS_FILE_KEY }')
+
+    config = { 'name': 'config', 'current_group': 0 }
+    ddb.put_item(TableName=MODELS_TABLE, Item=ddbjson.dumps(config, as_dict=True))

@@ -5,7 +5,8 @@ import random
 import boto3
 from aiobotocore.session import get_session
 from botocore.exceptions import ClientError
-from dynamodb_json import json_util as json
+from dynamodb_json import json_util as ddbjson
+
 
 COMPLETED_MODELS_TABLE = os.environ['COMPLETED_MODELS_TABLE']
 MODELS_TABLE = os.environ['MODELS_TABLE']
@@ -24,7 +25,7 @@ async def scan_completed_models(ddb, group, max_results):
     while True:
         response = await ddb.scan(**params)
         for item in response.get('Items', []):
-            yield json.loads(item, as_dict=True)
+            yield ddbjson.loads(item, as_dict=True)
             count += 1
             if count == max_results:
                 return
@@ -47,28 +48,25 @@ async def more_models_to_delete(ddb, group):
     return response['Count'] > 0
 
 
-async def mark_model_deleted(ddb, event):
+async def mark_model_deleted(ddb, new_event):
+    key = { 'group': new_event['group'],
+            'name': new_event['name'] }
+    model_key = { 'name': new_event['name'] }
     transaction = [
-        { 'Delete': { 'TableName': COMPLETED_MODELS_TABLE, 'Key': json.dumps(event, as_dict=True) } },
-        { 'Delete': { 'TableName': MODELS_TABLE, 'Key': json.dumps({'name': event['name']}, as_dict=True) } },
+        { 'Delete': { 'TableName': COMPLETED_MODELS_TABLE, 'Key': ddbjson.dumps(key, as_dict=True) } },
+        { 'Delete': { 'TableName': MODELS_TABLE, 'Key': ddbjson.dumps(model_key , as_dict=True) } },
     ]
     await ddb.transact_write_items(TransactItems=transaction)
 
 
 async def get_config(ddb):
     response = await ddb.get_item(TableName=MODELS_TABLE,
-                                  Key=json.dumps({'name': 'config'}, as_dict=True))
-    return json.loads(response['Item'], as_dict=True)
-
-
-async def get_model(ddb, model_name):
-    response = await ddb.get_item(TableName=MODELS_TABLE,
-                                  Key=json.dumps({'name': model_name}, as_dict=True))
-    return json.loads(response['Item'], as_dict=True)
+                                  Key=ddbjson.dumps({'name': 'config'}, as_dict=True))
+    return ddbjson.loads(response['Item'], as_dict=True)
 
 
 async def wait_for_model_deleted(sitewise, asset_model_id):
-    for _ in range(0, 300):
+    for _ in range(0, 180):
         try:
             sw_model = await sitewise.describe_asset_model(assetModelId=asset_model_id)
             status = sw_model['assetModelStatus']
@@ -85,9 +83,8 @@ async def wait_for_model_deleted(sitewise, asset_model_id):
 
 async def delete_sitewise_model(semaphore, sitewise, ddb, new_event):
     async with semaphore:
-        model = await get_model(ddb, new_event['name'])
-        model_name = model['name']
-        model_id = model['sw_id']
+        model_name = new_event['name']
+        model_id = new_event['sw_id']
 
         await asyncio.sleep(random.uniform(0.1, 1))
         try:
@@ -114,19 +111,19 @@ async def delete_sitewise_model(semaphore, sitewise, ddb, new_event):
 async def delete_models(sitewise, ddb):
     config = await get_config(ddb)
     current_group = config['current_group']
+
     tasks = []
     semaphore = asyncio.Semaphore(MAX_MODELS_PARALLEL_DELETE)
     async for new_event in scan_completed_models(ddb, current_group, MAX_MODELS_DELETE):
         tasks.append(asyncio.ensure_future(delete_sitewise_model(semaphore, sitewise, ddb, new_event)))
     await asyncio.gather(*tasks)
 
-
     if await more_models_to_delete(ddb, current_group):
         return { 'finished': False }
     else:
         if current_group > 0:
             config['current_group'] -= 1
-            await ddb.put_item(TableName=MODELS_TABLE, Item=json.dumps(config, as_dict=True))
+            await ddb.put_item(TableName=MODELS_TABLE, Item=ddbjson.dumps(config, as_dict=True))
             return { 'finished': False }
         else:
             return { 'finished': True }
@@ -134,6 +131,7 @@ async def delete_models(sitewise, ddb):
 
 async def async_handler(event, context):
     ddb_endpoint = os.environ.get('DDB_ENDPOINT')
+
     session = get_session()
     async with (session.create_client('iotsitewise') as sitewise,
                 session.create_client('dynamodb', endpoint_url=ddb_endpoint) as ddb):

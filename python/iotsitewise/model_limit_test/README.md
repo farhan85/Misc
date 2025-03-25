@@ -28,7 +28,10 @@ Back in your dev environment, create the tables in the local DynamoDB
 > ./venv/bin/python create-local-tables
 ```
 
-Run Lambda functions locally (note this _will_ make SiteWise API calls to create AssetModels)
+Specify a valid S3 bucket for local testing, by setting the `DATA_BUCKET` field
+in the `config-initdb.yaml` and `config-createmodel.yaml` files.
+
+Run Lambda functions locally. Note this _will_ make SiteWise API calls to create AssetModels.
 ```
 > ./venv/bin/lambda invoke --config-file config-initdb.yaml
 

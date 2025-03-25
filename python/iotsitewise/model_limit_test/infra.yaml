@@ -1,22 +1,12 @@
 Description: Number of connected AssetModels limit test
+Parameters:
+  ModelsFileS3Key:
+    Type: String
+    Description: Name of file in S3 to store Models info
 
 Resources:
-  NewModelsTable:
-    Type: AWS::DynamoDB::Table
-    Properties:
-      AttributeDefinitions:
-        - AttributeName: group
-          AttributeType: N
-        - AttributeName: name
-          AttributeType: S
-      KeySchema:
-        - AttributeName: group
-          KeyType: HASH
-        - AttributeName: name
-          KeyType: RANGE
-      ProvisionedThroughput:
-        ReadCapacityUnits: 20
-        WriteCapacityUnits: 20
+  DataBucket:
+    Type: AWS::S3::Bucket
 
   CompletedModelsTable:
     Type: AWS::DynamoDB::Table
@@ -83,9 +73,21 @@ Resources:
             - dynamodb:Scan
             - dynamodb:TransactWriteItems
             Resource:
-            - !GetAtt NewModelsTable.Arn
             - !GetAtt CompletedModelsTable.Arn
             - !GetAtt ModelsTable.Arn
+      - PolicyName: S3Permissions
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:DeleteObject
+            - s3:ListBucket
+            Resource:
+            - !GetAtt DataBucket.Arn
+            - !Sub "${DataBucket.Arn}/*"
       - PolicyName: LetCloudFormationManageLogGroups
         PolicyDocument:
           Version: '2012-10-17'
@@ -119,7 +121,8 @@ Resources:
             Version: '2012-10-17'
             Statement:
               - Effect: Allow
-                Action: lambda:InvokeFunction
+                Action:
+                  - lambda:InvokeFunction
                 Resource:
                 - !GetAtt DBInitializerLambda.Arn
                 - !GetAtt ModelCreatorLambda.Arn
@@ -131,10 +134,11 @@ Resources:
       Handler: loadtest.initdb.handler
       Runtime: python3.10
       Role: !GetAtt LambdaRole.Arn
-      Timeout: 600
+      Timeout: 900
       Environment:
         Variables:
-          NEW_MODELS_TABLE: !Ref NewModelsTable
+          DATA_BUCKET: !Ref DataBucket
+          MODELS_FILE_KEY: !Ref ModelsFileS3Key
           MODELS_TABLE: !Ref ModelsTable
       Code:
         # Code will be updated with a separate script
@@ -149,7 +153,8 @@ Resources:
       Timeout: 600
       Environment:
         Variables:
-          NEW_MODELS_TABLE: !Ref NewModelsTable
+          DATA_BUCKET: !Ref DataBucket
+          MODELS_FILE_KEY: !Ref ModelsFileS3Key
           COMPLETED_MODELS_TABLE: !Ref CompletedModelsTable
           MODELS_TABLE: !Ref ModelsTable
       Code:

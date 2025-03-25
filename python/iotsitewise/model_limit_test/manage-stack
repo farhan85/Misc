@@ -28,6 +28,7 @@ S3_KEY='iotsitewise_model_limit_test.zip'
 S3_FILENAME="s3://$S3_BUCKET/$S3_KEY"
 REGION=$(python -c "print('${AWS_DEFAULT_REGION}'.title().replace('-', ''))")
 CFN_STACK_NAME="ModelLimitTest${REGION}"
+MODELS_FILE_S3_KEY="ModelDB${Region}.json"
 
 
 set -e
@@ -53,6 +54,7 @@ else
     aws cloudformation $cfn_command \
             --capabilities CAPABILITY_IAM \
             --stack-name $CFN_STACK_NAME \
-            --template-body file://infra.yaml
+            --template-body file://infra.yaml \
+            --parameters ParameterKey=ModelsFileS3Key,ParameterValue=$MODELS_FILE_S3_KEY
     aws cloudformation wait $cfn_wait_command --stack-name $CFN_STACK_NAME
 fi
