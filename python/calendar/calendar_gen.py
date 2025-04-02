@@ -159,9 +159,17 @@ class MonthConfig(object):
     def __init__(self, year, month, calendar_info):
         self.month = month
         self.calendar_info = calendar_info
-        self.first_day = date(2018, month, 1)
+        self.first_day = date(year, month, 1)
         self.name = self.first_day.strftime('%B')
-        self.days = Calendar(firstweekday=6).monthdayscalendar(year, month)
+        _days = Calendar(firstweekday=6).monthdayscalendar(year, month)
+        if len(_days) == 6:
+            first_row = self.merge_lists(_days[0], _days[-1])
+            _days = [first_row] + _days[1:-1]
+        self.days = _days
+
+    @staticmethod
+    def merge_lists(lst1, lst2):
+        return [x if x != 0 else y for x, y in zip(lst1, lst2)]
 
     def num_rows(self):
         return len(self.days)

@@ -77,11 +77,11 @@
                     {%- for col in range(0,7) -%}
                     {% set cell = month.cell(row, col) %}
                     <div class="div-table-cell
-							{%- if cell.day_type.value == 2 -%}
+                            {%- if cell.day_type.value == 2 -%}
                                 {{ ' ' }}div-school-holiday
-							{%- elif cell.day_type.value == 3 -%}
+                            {%- elif cell.day_type.value == 3 -%}
                                 {{ ' ' }}div-public-holiday
-							{% endif %}">
+                            {% endif %}">
                         <div class="div-table-cell-day">{{ cell.day }}</div>
                         <div class="div-table-cell-content">{{ cell.notes | join('<br />') }}</div>
                     </div>
