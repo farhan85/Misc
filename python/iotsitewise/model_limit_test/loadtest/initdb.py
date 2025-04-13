@@ -86,7 +86,8 @@ def to_models_obj(tree):
                 'group': idx,
                 'is_leaf_node': len(n.children) == 0,
                 'sw_id': None,
-                'children': [c.name for c in n.children]
+                'children': [c.name for c in n.children],
+                'parent': n.parent.name if n.parent else None,
             })
     return models
 
@@ -112,7 +113,7 @@ def handler(event, context):
 
     models = to_models_obj(tree)
     s3.put_object(Body=json.dumps(models), Bucket=S3_BUCKET, Key=MODELS_FILE_KEY , ContentType='application/json')
-    print(f'Updated file s3://{S3_BUCKET}/{MODELS_FILE_KEY }')
+    print(f'Updated file s3://{S3_BUCKET}/{MODELS_FILE_KEY}')
 
     config = { 'name': 'config', 'current_group': 0 }
     ddb.put_item(TableName=MODELS_TABLE, Item=ddbjson.dumps(config, as_dict=True))
