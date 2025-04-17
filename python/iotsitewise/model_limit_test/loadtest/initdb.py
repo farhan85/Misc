@@ -1,5 +1,6 @@
 import os
 import time
+from collections import deque
 
 import boto3
 import json
@@ -23,29 +24,50 @@ class Node:
             parent.add_child(self)
 
     def add_child(self, child):
+        child.parent = self
         self.children.append(child)
 
 
-class BinaryTree:
-    def __init__(self, prefix, num_models):
-        root_node = Node(f'{prefix}-1')
-        self.levels = [[root_node]]
-        node_count = 1
-        while node_count < num_models:
-            curr_level = []
-            for parent in self.levels[-1]:
-                node_count += 1
-                curr_level.append(Node(f'{prefix}-{node_count}', parent=parent))
-                if node_count == num_models:
-                    break
-                node_count += 1
-                curr_level.append(Node(f'{prefix}-{node_count}', parent=parent))
-                if node_count == num_models:
-                    break
-            self.levels.append(curr_level)
+class Tree:
+    def __init__(self, max_children):
+        self.root = None
+        self.max_children = max_children
+
+    @staticmethod
+    def create(prefix, num_models, max_children):
+        tree = Tree(max_children)
+        for idx in range(num_models):
+            tree.insert(f'{prefix}-{idx}')
+        return tree
+
+    @classmethod
+    def create_binary(cls, prefix, num_models):
+        return cls.create(prefix, num_models, 2)
+
+    def insert(self, name):
+        new_node = Node(name)
+        if self.root is None:
+            self.root = new_node
+        else:
+            queue = deque()
+            queue.append(self.root)
+            while queue:
+                node = queue.popleft()
+                if len(node.children) < self.max_children:
+                    node.add_child(new_node)
+                    return
+                else:
+                    queue.extend(node.children)
 
     def batches(self):
-        return reversed(self.levels)
+        levels = []
+        curr_level = [self.root]
+        while curr_level:
+            levels.append(curr_level)
+            curr_level = [child for node in curr_level
+                                for child in node.children]
+        for level in reversed(levels):
+            yield level
 
 
 class FlatTree:
@@ -95,13 +117,16 @@ def to_models_obj(tree):
 def handler(event, context):
     prefix = event['prefix']
     num_models = event['num_models']
+    max_children = event['max_children']
     tree_type = event['tree_type']
 
     s3 = boto3.client('s3')
     ddb = boto3.client('dynamodb', endpoint_url=DDB_ENDPOINT)
 
-    if tree_type == 'binary':
-        tree = BinaryTree(prefix, num_models)
+    if tree_type == 'tree':
+        tree = Tree.create(prefix, num_models, max_children)
+    elif tree_type == 'binary':
+        tree = Tree.create_binary(prefix, num_models)
     elif tree_type == 'flat':
         tree = FlatTree(prefix, num_models)
     elif tree_type == 'single-path':
