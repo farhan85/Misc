@@ -150,42 +150,48 @@ def get_prop_id(asset_model, prop_name):
             return property['id']
 
 
+async def _create_sitewise_model(sitewise, ddb, new_model):
+    model_name = new_model['name']
+    if new_model['is_leaf_node']:
+        model_spec = create_leaf_model_spec(model_name)
+    else:
+        child_models = []
+        for child_name in new_model['children']:
+            child = await get_model(ddb, child_name)
+            child_models.append(child)
+        model_spec = create_parent_model_spec(model_name, child_models)
+
+    await asyncio.sleep(random.uniform(0.1, 1))
+    try:
+        response = await sitewise.create_asset_model(**model_spec)
+        model_id = response['assetModelId']
+        print('Creating AssetModel. Name={}, Id={}, RequestId={}'.format(
+            model_name,
+            model_id,
+            response['ResponseMetadata']['RequestId']))
+
+        response = await sitewise.describe_asset_model(assetModelId=model_id)
+        new_model['sw_id'] = model_id
+        new_model['metric_id'] = get_prop_id(response, TEMPERATURE_METRIC_NAME)
+        await save_new_model_ddb(ddb, new_model)
+        return model_id
+    except ClientError as e:
+        print('Failed to create/describe AssetModel. Name={}, RequestId={}, Error={} {}'.format(
+            model_name,
+            e.response['ResponseMetadata']['RequestId'],
+            e.response['Error']['Code'],
+            e.response['Error']['Message']))
+        raise
+
+
 async def create_sitewise_model(semaphore, sitewise, ddb, new_model):
     async with semaphore:
         model_name = new_model['name']
         model = await get_model(ddb, model_name)
-        if model is not None:
-            model_id = model['sw_id']
+        if model is None:
+            model_id = await _create_sitewise_model(sitewise, ddb, new_model)
         else:
-            if new_model['is_leaf_node']:
-                model_spec = create_leaf_model_spec(model_name)
-            else:
-                child_models = []
-                for child_name in new_model['children']:
-                    child = await get_model(ddb, child_name)
-                    child_models.append(child)
-                model_spec = create_parent_model_spec(model_name, child_models)
-
-            await asyncio.sleep(random.uniform(0.1, 1))
-            try:
-                response = await sitewise.create_asset_model(**model_spec)
-                model_id = response['assetModelId']
-                print('Creating AssetModel. Name={}, Id={}, RequestId={}'.format(
-                    model_name,
-                    model_id,
-                    response['ResponseMetadata']['RequestId']))
-
-                response = await sitewise.describe_asset_model(assetModelId=model_id)
-                new_model['sw_id'] = model_id
-                new_model['metric_id'] = get_prop_id(response, TEMPERATURE_METRIC_NAME)
-                await save_new_model_ddb(ddb, new_model)
-            except ClientError as e:
-                print('Failed to create/describe AssetModel. Name={}, RequestId={}, Error={} {}'.format(
-                    model_name,
-                    e.response['ResponseMetadata']['RequestId'],
-                    e.response['Error']['Code'],
-                    e.response['Error']['Message']))
-                raise
+            model_id = model['sw_id']
 
         await wait_for_model_active(sitewise, model_id)
         print(f'AssetModel {model_name} created')
