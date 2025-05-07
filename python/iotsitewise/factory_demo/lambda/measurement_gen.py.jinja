@@ -1,0 +1,51 @@
+import boto3
+import os
+import random
+import time
+from botocore.exceptions import ClientError
+from dateutil.parser import parse
+
+
+ASSET_PROPERTIES = [
+{%- for val in asset_properties %}
+    ('{{ val[0] }}', '{{ val[1] }}'),
+{%- endfor %}
+]
+
+
+def gen_values():
+    for idx, (asset_id, prop_id) in enumerate(ASSET_PROPERTIES):
+        yield asset_id, prop_id, random.gauss(10*(6 + idx), 5*(1 + idx))
+
+
+def create_entry(entry_id, timestamp_sec, asset_id, property_id, property_value):
+    return {
+        'entryId': str(entry_id),
+        'assetId': asset_id,
+        'propertyId': property_id,
+        'propertyValues': [{'value': {'doubleValue': property_value},
+                            'timestamp': {'timeInSeconds': timestamp_sec}}]}
+
+
+def chunks(lst, n):
+    for i in range(0, len(lst), n):
+        yield lst[i:i+n]
+
+
+def handler(event, context):
+    print('Event:', event)
+    sitewise_client = boto3.client(service_name='iotsitewise', region_name='{{ region }}')
+    ts_epoch = int(parse(event['time']).replace(second=0).timestamp())
+    entries = [
+        create_entry(idx, ts_epoch, asset_id, prop_id, prop_value)
+        for idx, (asset_id, prop_id, prop_value) in enumerate(gen_values())
+    ]
+    for batch in chunks(entries, 10):
+        print('Sending batch to Sitewise:', batch)
+        try:
+            response = sitewise_client.batch_put_asset_property_value(entries=batch)
+        except ClientError as e:
+            print('ERROR: Failed to send data to SiteWise')
+            response = e.response
+        print('Response:', response)
+        time.sleep(0.5)

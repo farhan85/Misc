@@ -1,0 +1,228 @@
+#
+# Note this is just for test purposes, so there's no load balancer with HTTPS support or host redundancy in this setup
+#
+# Since only HTTP connections are being used, this template restricts access to the Grafana dashboard
+# using a user-provided Prefix list which you should set up separately and use to maintain a list of
+# IPs or CIDR ranges that can have access to the Grafana dashboard.
+#
+# Once the host is running, to view the Grafana dashboard go to http://<EC2 host public IP>/grafana/
+#
+
+Description: Grafana instance
+
+Parameters:
+  AMI:
+    Type: String
+    Description: AMI ID to use when launching EC2 instances
+  InstanceType:
+    Type: String
+    Description: EC2 instance type to use
+  KeyName:
+    Type: String
+    Description: Key pair to use for accessing the EC2 instances
+  PrefixList:
+    Type: String
+    Description: The Prefix list containing the CIDR range where valid requests can come from
+
+Resources:
+
+  Vpc:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: 10.0.0.0/16
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+
+  VpcInternetGatewayAttachment:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref Vpc
+      InternetGatewayId: !Ref InternetGateway
+
+  PublicSubnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref Vpc
+      AvailabilityZone: !Sub ${AWS::Region}a
+      CidrBlock: 10.0.1.0/24
+
+  PublicSubnetRouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref Vpc
+
+  PublicSubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicSubnetRouteTable
+      SubnetId: !Ref PublicSubnet
+
+  PublicSubnetRouteToInternet:
+    Type: AWS::EC2::Route
+    DependsOn: VpcInternetGatewayAttachment
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      RouteTableId: !Ref PublicSubnetRouteTable
+      GatewayId: !Ref InternetGateway
+
+  InstanceRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: ec2.amazonaws.com
+      Policies:
+      - PolicyName: SiteWiseAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - iotsitewise:Describe*
+              - iotsitewise:List*
+              - iotsitewise:Get*
+              - iotsitewise:BatchGet*
+            Resource: '*'
+
+  InstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Path: "/"
+      Roles:
+      - !Ref InstanceRole
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Security group for PublicSubnet
+      VpcId: !Ref Vpc
+      SecurityGroupEgress:
+        - IpProtocol: "-1"
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          SourcePrefixListId: !Ref PrefixList
+        - IpProtocol: tcp
+          FromPort: '80'
+          ToPort: '80'
+          SourcePrefixListId: !Ref PrefixList
+
+  PublicSubnetLaunchTemplate:
+    Type: AWS::EC2::LaunchTemplate
+    Properties:
+      LaunchTemplateData:
+        ImageId: !Ref AMI
+        NetworkInterfaces:
+          - DeviceIndex: 0
+            AssociatePublicIpAddress: true
+            Groups:
+              - !Ref SecurityGroup
+        IamInstanceProfile:
+          Name: !Ref InstanceProfile
+        InstanceType: !Ref InstanceType
+        KeyName: !Ref KeyName
+        UserData:
+          Fn::Base64:
+            !Sub |
+            #!/bin/bash -xe
+            # Output saved to /var/log/cloud-init-output.log
+
+            yum update -y
+
+            cat > /etc/yum.repos.d/grafana.repo << 'EOF'
+            [grafana]
+            name=grafana
+            baseurl=https://packages.grafana.com/oss/rpm
+            repo_gpgcheck=1
+            enabled=1
+            gpgcheck=1
+            gpgkey=https://packages.grafana.com/gpg.key
+            sslverify=1
+            sslcacert=/etc/pki/tls/certs/ca-bundle.crt
+            EOF
+
+            yum install grafana -y
+            sed -i 's|[;]root_url.*$|root_url = %(protocol)s://%(domain)s:%(http_port)s/grafana|' /etc/grafana/grafana.ini
+            systemctl daemon-reload
+            systemctl start grafana-server
+            systemctl enable grafana-server.service
+
+            amazon-linux-extras install nginx1 -y
+
+            cat > /etc/nginx/nginx.conf << 'EOF'
+            events {
+              worker_connections 64;
+            }
+
+            http {
+              map $http_upgrade $connection_upgrade {
+                default upgrade;
+                '' close;
+              }
+
+              upstream grafana {
+                server localhost:3000;
+              }
+
+              server {
+                listen 80;
+                root /usr/share/nginx/html;
+                index index.html index.htm;
+
+                location /grafana/ {
+                  rewrite  ^/grafana/(.*)  /$1 break;
+                  proxy_set_header Host $host;
+                  proxy_pass http://grafana;
+                }
+
+                location /grafana/api/live/ {
+                  rewrite  ^/grafana/(.*)  /$1 break;
+                  proxy_http_version 1.1;
+                  proxy_set_header Upgrade $http_upgrade;
+                  proxy_set_header Connection $connection_upgrade;
+                  proxy_set_header Host $host;
+                  proxy_pass http://grafana;
+                }
+              }
+            }
+            EOF
+
+            systemctl start nginx
+            systemctl enable nginx
+
+            grafana-cli plugins install grafana-iot-sitewise-datasource
+
+            cat > /etc/grafana/provisioning/datasources/iotsitewise.yaml << 'EOF'
+            apiVersion: 1
+            datasources:
+              - name: IoT SiteWise
+                type: grafana-iot-sitewise-datasource
+                jsonData:
+                  authType: awsSigv4
+                  defaultRegion: ${AWS::Region}
+            EOF
+
+            systemctl restart grafana-server
+
+  PublicSubnetAutoScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      MaxSize: 1
+      MinSize: 1
+      DesiredCapacity: 1
+      LaunchTemplate:
+        LaunchTemplateId: !Ref PublicSubnetLaunchTemplate
+        Version: !GetAtt PublicSubnetLaunchTemplate.LatestVersionNumber
+      VPCZoneIdentifier:
+        - !Ref PublicSubnet
+      Tags:
+        - Key: Name
+          Value: !Sub "${AWS::StackName}-inst"
+          PropagateAtLaunch: true

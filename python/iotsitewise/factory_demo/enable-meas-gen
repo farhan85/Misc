@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+
+PYTHON='/home/ahammedf/.pyenv/shims/python'
+DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null && pwd )"
+NAME=$(basename $0)
+
+read -r -d '' USAGE << EOF
+Usage: $NAME [-d|--db <db-file>] [--start | --stop] [-h|--help]
+
+Options:
+    -d,--db      Resources DB file
+    --start      Start the measurement generator
+    --stop       Stop the measurement generator
+    -h, --help   Displays this help
+EOF
+
+options=$(getopt -o d:h -l db:,start,stop,help -n "$NAME" -- "$@") || exit
+eval set -- "$options"
+
+db_file=
+operation=
+while true; do
+    case "$1" in
+        -d|--db)    db_file="$2"              ; shift 2 ;;
+        --start)    operation='enable-rule'   ; shift ;;
+        --stop)     operation='disable-rule'  ; shift ;;
+        -h|--help)  echo "$USAGE"; exit 0 ;;
+        --)         shift; break ;;
+    esac
+done
+
+[[ -z "$db_file" ]] && { echo "Missing db_file"; exit 1; }
+[[ -z "$operation" ]] && { echo "Missing operation"; exit 1; }
+[[ -z "$AWS_ACCESS_KEY_ID" ]] && { echo "Missing AWS creds"; exit 1; }
+
+
+region=$(jq -r '.config["1"].region' $db_file)
+rule=$(jq -r '.config["1"].meas_gen_invoker_rule' $db_file)
+
+set -x
+aws events $operation --region $region --name $rule

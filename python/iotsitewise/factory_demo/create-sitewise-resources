@@ -1,0 +1,81 @@
+#!/usr/bin/env bash
+
+db_file="resources_${AWS_DEFAULT_REGION}.json"
+num_sites=1
+num_generators=2
+prefix='DemoCompany'
+while getopts 'd:p:s:g:h' OPT; do
+    case "$OPT" in
+        d)  db_file="$OPTARG" ;;
+        p)  prefix="$OPTARG" ;;
+        s)  num_sites="$OPTARG" ;;
+        g)  num_generators="$OPTARG" ;;
+        h)  echo 'Args: [-d <db-file>] [-p <prefix>] [-s <num sites>] [-g <num generators>]'
+            echo 'Notes:'
+            echo '  You need to have AWS CLI Environment creds set'
+            echo "  Default prefix: $prefix"
+            echo "  Default num sites: $num_sites"
+            echo "  Default num generators: $num_generators"
+            exit 0 ;;
+        *)  echo 'Invalid args error' ; exit 2 ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+
+MEAS_GEN_STACK="DemoCompanyMeasurementGen"
+cfn_output=$(aws cloudformation describe-stacks --stack-name $MEAS_GEN_STACK --query 'Stacks[].Outputs' --output text 2>&1)
+if [[ "$cfn_output" == *"does not exist"* ]]; then
+    echo 'Measurement Generator stack not found'
+    exit 1
+fi
+
+meas_gen_function_name=$(echo "$cfn_output" | awk '/MeasurementGenLambdaName/ {print $2}')
+meas_gen_invoker_rule=$(echo "$cfn_output" | awk '/MeasurementGenInvokerRuleName/ {print $2}')
+cw_sender_function_name=$(echo "$cfn_output" | awk '/CloudWatchSenderLambdaName/ {print $2}')
+
+
+# Write config to DB file (in the format used by the Python TinyDB lib)
+# Retrieve the config with db.table('config').get(doc_id=1)
+config=$(jq -n \
+    --arg region $AWS_DEFAULT_REGION \
+    --arg prefix "$prefix" \
+    --arg meas_gen_lambda $meas_gen_function_name \
+    --arg meas_gen_invoker $meas_gen_invoker_rule \
+    --arg cw_sender_lambda $cw_sender_function_name \
+    --arg nsites $num_sites \
+    --arg ngenerators $num_generators \
+    '{
+       region: $region,
+       resource_name_prefix: $prefix,
+       meas_gen_function_name: $meas_gen_lambda,
+       meas_gen_invoker_rule: $meas_gen_invoker,
+       cw_sender_function_name: $cw_sender_lambda,
+       num_sites: ($nsites|tonumber),
+       num_generators: ($ngenerators|tonumber)
+     }')
+
+jq -e '.' $db_file >/dev/null 2>&1
+if [[ "$?" -ne 0 ]]; then
+    # Creating new json file
+    jq -n --argjson config "$config" '{ config: { "1": $config } }' > $db_file
+else
+    # Updating existing json file
+    jq --argjson config "$config" '.config.["1"] = $config' $db_file > tmp.json
+    mv tmp.json $db_file
+fi
+
+set -e
+
+python sitewise/create_asset_models.py -d $db_file
+python sitewise/create_assets.py -d $db_file
+python sitewise/associate_assets.py -d $db_file
+
+python lambda/update_lambdas.py -d $db_file
+echo 'Command to start MeasurementGenInvoker:'
+echo "> ./enable-meas-gen -d $db_file --start"
+
+# Format DB file
+tmp_file=$(mktemp)
+jq . $db_file > $tmp_file
+mv $tmp_file $db_file

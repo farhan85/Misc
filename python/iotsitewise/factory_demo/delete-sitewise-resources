@@ -1,0 +1,23 @@
+#!/usr/bin/env bash
+
+db_file=
+while getopts 'd:h' OPT; do
+    case "$OPT" in
+        d)  db_file="$OPTARG" ;;
+        h)  echo 'Args: [-d <db-file>]'
+            exit 0 ;;
+        *)  echo 'Invalid args error' ; exit 2 ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+if [[ -z "$db_file" ]]; then
+    db_file="resources_${AWS_DEFAULT_REGION}.json"
+fi
+
+python sitewise/delete_resources.py -d $db_file
+
+# format_db_file
+tmp_file=$(mktemp)
+jq . $db_file > $tmp_file
+mv $tmp_file $db_file
