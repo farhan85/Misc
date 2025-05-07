@@ -194,8 +194,8 @@ def main(db_filename):
         generator_model = create_asset_model(sitewise, generator_model)
         generator_model = {
             'type': 'generator',
-            'id': generator_model ['assetModelId'],
-            'name': generator_model ['assetModelName'],
+            'id': generator_model['assetModelId'],
+            'name': generator_model['assetModelName'],
             'power_meas_prop_id': get_prop_id(generator_model, GENERATOR_POWER_MEAS_PROP_NAME),
             'temp_meas_prop_id': get_prop_id(generator_model, GENERATOR_TEMP_MEAS_PROP_NAME),
             'power_prop_id': get_prop_id(generator_model, GENERATOR_POWER_PROP_NAME),
