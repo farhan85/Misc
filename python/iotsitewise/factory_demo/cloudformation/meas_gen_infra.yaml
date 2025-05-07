@@ -1,0 +1,146 @@
+Description: Generates test measurement data and redirects data to CloudWatch for monitoring
+
+Resources:
+  MeasurementGenRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: lambda.amazonaws.com
+      Policies:
+      - PolicyName: SiteWiseAccessPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: iotsitewise:BatchPutAssetPropertyValue
+            Resource: '*'
+      - PolicyName: OnlyCloudFormationManagesLogGroups
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Deny
+            Action: logs:CreateLogGroup
+            Resource: '*'
+      - PolicyName: AllowWriteCloudWatchLogs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+
+  CloudWatchSenderRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: lambda.amazonaws.com
+      Policies:
+      - PolicyName: CloudWatchMetricsPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: cloudwatch:PutMetricData
+            Resource: '*'
+      - PolicyName: OnlyCloudFormationManagesLogGroups
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Deny
+            Action: logs:CreateLogGroup
+            Resource: '*'
+      - PolicyName: AllowWriteCloudWatchLogs
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action:
+              - logs:CreateLogStream
+              - logs:PutLogEvents
+            Resource: '*'
+
+  MeasurementGenLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.12
+      Role: !GetAtt MeasurementGenRole.Arn
+      Code:
+        # Code will be updated with a separate script
+        ZipFile: 'def handler(event, context): pass'
+
+  CloudWatchSenderLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.12
+      Role: !GetAtt CloudWatchSenderRole.Arn
+      Code:
+        # Code will be updated with a separate script
+        ZipFile: 'def handler(event, context): pass'
+
+  MeasurementGenLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${MeasurementGenLambda}"
+      RetentionInDays: 1
+
+  CloudWatchSenderLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${CloudWatchSenderLambda}"
+      RetentionInDays: 1
+
+  MeasurementGenInvokerRule:
+    Type: AWS::Events::Rule
+    Properties:
+      ScheduleExpression: 'rate(1 minute)'
+      State: DISABLED
+      Targets:
+        - Id: 1
+          Arn: !GetAtt MeasurementGenLambda.Arn
+
+  SiteWiseAssetPropertyListenerTopicRule:
+    Type: AWS::IoT::TopicRule
+    Properties:
+      TopicRulePayload:
+        Sql: "SELECT * FROM '$aws/sitewise/asset-models/+/assets/+/properties/+'"
+        Actions:
+          - Lambda:
+              FunctionArn: !GetAtt CloudWatchSenderLambda.Arn
+
+  MeasurementGenInvokerPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref MeasurementGenLambda
+      Principal: events.amazonaws.com
+      SourceArn: !GetAtt MeasurementGenInvokerRule.Arn
+
+  CloudWatchSenderPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CloudWatchSenderLambda
+      Principal: iot.amazonaws.com
+      SourceArn: !GetAtt SiteWiseAssetPropertyListenerTopicRule.Arn
+
+Outputs:
+  MeasurementGenInvokerRuleName:
+    Value: !Ref MeasurementGenInvokerRule
+  MeasurementGenLambdaName:
+    Value: !Ref MeasurementGenLambda
+  CloudWatchSenderLambdaName:
+    Value: !Ref CloudWatchSenderLambda

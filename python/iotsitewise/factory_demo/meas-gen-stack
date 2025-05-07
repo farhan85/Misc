@@ -1,0 +1,47 @@
+#!/usr/bin/env bash
+#vi: ft=bash
+
+cfn_command=
+cfn_wait_command=
+if [[ "$1" == "-c" || "$1" == "--create" ]]; then
+    cfn_command='create-stack'
+    cfn_wait_command='stack-create-complete'
+elif [[ "$1" == "-u" || "$1" == "--update" ]]; then
+    cfn_command='update-stack'
+    cfn_wait_command='stack-update-complete'
+elif [[ "$1" == "-d" || "$1" == "--delete" ]]; then
+    cfn_command='delete-stack'
+    cfn_wait_command='stack-delete-complete'
+else
+    echo "Usage: $0 <action>"
+    echo
+    echo "Valid actions"
+    echo "    -c,--create"
+    echo "    -u,--update"
+    echo "    -d,--delete"
+    echo
+    echo "AWS env creds needs to already be set"
+    exit 1
+fi
+
+if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_DEFAULT_REGION" ]]; then
+    echo "Missing AWS env variables"
+    exit 1
+fi
+
+
+STACK_NAME="DemoCompanyMeasurementGen"
+INFRA_FILE='cloudformation/meas_gen_infra.yaml'
+
+set -x
+
+if [[ "$cfn_command" != "delete-stack" ]]; then
+    aws cloudformation $cfn_command \
+            --capabilities CAPABILITY_IAM \
+            --stack-name $STACK_NAME \
+            --template-body "file://$INFRA_FILE"
+else
+    aws cloudformation $cfn_command --stack-name $STACK_NAME
+fi
+
+aws cloudformation wait $cfn_wait_command --stack-name $STACK_NAME
