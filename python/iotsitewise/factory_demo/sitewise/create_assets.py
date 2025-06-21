@@ -76,14 +76,15 @@ def main(db_filename):
         if asset_id := new_asset(sitewise, assets, site_model, asset_name):
             asset_ids.append((asset_id, asset_name))
 
-    asset_name = f'{prefix}-Factory-{idx}'
-    if asset_id := new_asset(sitewise, assets, factory_model, asset_name):
-        asset_ids.append((asset_id, asset_name))
-        # Enable notifications for properties that will be forwarded to CloudWatch for monitoring
-        enable_notifications(sitewise, asset_id, factory_model['thermal_eff_prop_id'])
+    factory_asset_name = f'{prefix}-Factory'
+    if factory_asset_id := new_asset(sitewise, assets, factory_model, factory_asset_name):
+        asset_ids.append((factory_asset_id, factory_asset_name))
 
     for asset_id, asset_name in asset_ids:
         wait_for_asset_active(sitewise, asset_id, asset_name)
+
+    # Enable notifications for properties that will be forwarded to CloudWatch for monitoring
+    enable_notifications(sitewise, factory_asset_id, factory_model['thermal_eff_prop_id'])
 
 
 if __name__ == '__main__':

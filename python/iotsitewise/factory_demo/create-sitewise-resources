@@ -3,7 +3,7 @@
 db_file="resources_${AWS_DEFAULT_REGION}.json"
 num_sites=1
 num_generators=2
-prefix='DemoCompany'
+prefix='DemoFactory'
 while getopts 'd:p:s:g:h' OPT; do
     case "$OPT" in
         d)  db_file="$OPTARG" ;;
@@ -23,7 +23,7 @@ done
 shift $((OPTIND - 1))
 
 
-MEAS_GEN_STACK="DemoCompanyMeasurementGen"
+MEAS_GEN_STACK="DemoFactoryMeasurementGen"
 cfn_output=$(aws cloudformation describe-stacks --stack-name $MEAS_GEN_STACK --query 'Stacks[].Outputs' --output text 2>&1)
 if [[ "$cfn_output" == *"does not exist"* ]]; then
     echo 'Measurement Generator stack not found'

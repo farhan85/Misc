@@ -30,7 +30,7 @@ if [[ -z "$AWS_ACCESS_KEY_ID" || -z "$AWS_SECRET_ACCESS_KEY" || -z "$AWS_DEFAULT
 fi
 
 
-STACK_NAME="DemoCompanyMeasurementGen"
+STACK_NAME="DemoFactoryMeasurementGen"
 INFRA_FILE='cloudformation/meas_gen_infra.yaml'
 
 set -x

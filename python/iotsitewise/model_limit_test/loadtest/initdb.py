@@ -77,13 +77,14 @@ class FlatTree:
 
 class SinglePath:
     def __init__(self, prefix, num_models):
-        self.levels = [[Node(f'{prefix}-1')]]
+        self.nodes = [Node(f'{prefix}-1')]
         for idx in range(2, num_models + 1):
-            parent = self.levels[-1][0]
-            self.levels.append([ Node(f'{prefix}-{idx}', parent=parent) ])
+            new_node = Node(f'{prefix}-{idx}', parent=self.nodes[-1])
+            self.levels.append(new_node)
 
     def batches(self):
-        return reversed(self.levels)
+        for n in reversed(self.nodes):
+            yield [n]
 
 
 class DisconnectedNodes:
