@@ -133,6 +133,8 @@ Resources:
             !Sub |
             #!/bin/bash -xe
             # Output saved to /var/log/cloud-init-output.log
+            # Grafana logs: /var/log/grafana/
+            # Nginx logs: /var/log/nginx/
 
             yum update -y
 

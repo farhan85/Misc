@@ -81,9 +81,13 @@ def value_as_string(property):
     return str(value)
 
 
+def timestamp_as_string(property):
+    return '-' if property.timestamp == '-' else datetime.fromtimestamp(int(property.timestamp))
+
+
 def print_property_values(property_values):
     headers = ['AssetId', 'PropertyId', 'Name', 'Value', 'Timestamp', 'Quality']
-    row_data = [(p.asset_id, p.id, p.name, value_as_string(p), p.timestamp, p.quality)
+    row_data = [(p.asset_id, p.id, p.name, value_as_string(p), timestamp_as_string(p), p.quality)
                 for p in property_values]
     print(tabulate(row_data, headers=headers, tablefmt="presto"))
 

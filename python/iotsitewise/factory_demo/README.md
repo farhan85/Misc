@@ -34,10 +34,10 @@ All scripts in this readme needs to be run within the virtual environment.
 > echo $AWS_ACCESS_KEY_ID
 > echo $AWS_DEFAULT_REGION
 
-# Create the CloudFormation stack with the Lambda functions for generating test data
+# Create the CloudFormation stack with the Lambda functions used in this set up
 > ./meas-gen-stack --create
 
-# Create the SiteWise resources (use -h to view all configurable options)
+# Create the SiteWise resources (models and assets). Use -h to view all configurable options
 > ./create-sitewise-resources
 ```
 
@@ -49,7 +49,7 @@ containing the test configuration and all SiteWise resources that has been creat
 > ./enable-meas-gen -d <resources DB file> --start
 ```
 
-Now you can view your test resources using the CLI, your own scripts using the AWS SDK, or by
+Now you can view your test resources using either the CLI, scripts using the AWS SDK, or by
 visiting the [AWS IoT SiteWise console](https://console.aws.amazon.com/iotsitewise).
 
 Metrics for the top-level Assets are also being forwarded to CloudWatch (using the custom namespace
@@ -59,7 +59,7 @@ Metrics for the top-level Assets are also being forwarded to CloudWatch (using t
 ## Creating Grafana dashboards
 
 As a pre-requisite, you must create your own [custom managed prefix list](https://docs.aws.amazon.com/vpc/latest/userguide/managed-prefix-lists.html),
-specifying which host IPs can access the Grafana dashboards.
+specifying which IPs can access the Grafana dashboards.
 
 The EC2 instance running the Grafana service only accepts HTTP connections, and because of this,
 access to the Grafana dashboard is restricted to a customer-managed prefix list which you should
@@ -82,7 +82,7 @@ Now run the script to create the CloudFormation stack with the Grafana resources
 ```
 
 The CloudFormation stack includes an Auto Scaling Group configured to run one EC2 instance, which
-will load some bootstrap code on startup to install Grafana (with the IoT SiteWise datasource) and
+will run some bootstrap code on startup to install Grafana (with the IoT SiteWise datasource) and
 Nginx to accept HTTP connections.
 
 Wait for this EC2 instance to finish setting itself up, then get it's public IP address
@@ -90,8 +90,8 @@ Wait for this EC2 instance to finish setting itself up, then get it's public IP 
 ```
 aws ec2 describe-instances \
     --filters 'Name=instance-state-name,Values=running' \
-    --query 'Reservations[*].Instances[*].[InstanceId, PublicIpAddress]' \
-    --output text
+    --query 'Reservations[*].Instances[*].[Tags[?Key==`Name`].Value|[0], InstanceId, PublicIpAddress]' \
+    --output table
 ```
 
 Now go to the following URL to view and configure the Grafana dashboard

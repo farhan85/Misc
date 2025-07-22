@@ -43,10 +43,12 @@ def new_asset(sitewise, assets_db, model, asset_name):
         return asset_id
 
 
-def enable_notifications(sitewise, asset_id, property_id):
+def enable_notifications(sitewise, asset_name, asset_id, property_name, property_id):
+    print(f'Enabling notification for Asset {asset_name} Property {property_name}')
     sitewise.update_asset_property(assetId=asset_id,
                                    propertyId=property_id,
                                    propertyNotificationState='ENABLED')
+
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
 @click.option('-d', '--db', '--db-filename', help='DB file name', required=True)
@@ -79,12 +81,16 @@ def main(db_filename):
     factory_asset_name = f'{prefix}-Factory'
     if factory_asset_id := new_asset(sitewise, assets, factory_model, factory_asset_name):
         asset_ids.append((factory_asset_id, factory_asset_name))
+    else:
+        factory_asset_id = assets.get(Asset.name == factory_asset_name)['id']
 
     for asset_id, asset_name in asset_ids:
         wait_for_asset_active(sitewise, asset_id, asset_name)
 
     # Enable notifications for properties that will be forwarded to CloudWatch for monitoring
-    enable_notifications(sitewise, factory_asset_id, factory_model['thermal_eff_prop_id'])
+    prop_name = 'power_rate_prop_id'
+    prop_id = factory_model[prop_name]
+    enable_notifications(sitewise, factory_asset_name, factory_asset_id, prop_name, prop_id)
 
 
 if __name__ == '__main__':

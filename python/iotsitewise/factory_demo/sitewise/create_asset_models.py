@@ -17,7 +17,7 @@ SITE_POWER_PROP_NAME = 'power_max'
 SITE_TEMP_PROP_NAME = 'temperature_avg'
 SITE_HIERARCHY_NAME = 'hierarchy_1'
 FACTORY_HIERARCHY_NAME = 'hierarchy_1'
-FACTORY_THERM_EFF_PROP_NAME = 'thermal_efficiency'
+POWER_RATE_PROP_NAME = 'power_rate'
 
 
 def wait_for_asset_model_active(sitewise, asset_model_id, asset_model_name):
@@ -141,7 +141,7 @@ def create_factory_asset_model(name_prefix, child_model_id, power_prop_id, temp_
         'assetModelDescription': 'Factory with multiple sites',
         'assetModelProperties': [
             {
-                'name': FACTORY_THERM_EFF_PROP_NAME,
+                'name': POWER_RATE_PROP_NAME,
                 'dataType': 'DOUBLE',
                 'unit': 'W/C',
                 'type': {
@@ -227,7 +227,7 @@ def main(db_filename):
             'type': 'factory',
             'id': factory_model['assetModelId'],
             'name': factory_model['assetModelName'],
-            'thermal_eff_prop_id': get_prop_id(factory_model, FACTORY_THERM_EFF_PROP_NAME),
+            'power_rate_prop_id': get_prop_id(factory_model, POWER_RATE_PROP_NAME),
             'hierarchy_id': get_hierarchy_id(factory_model, FACTORY_HIERARCHY_NAME),
         }
         models.insert(factory_model)

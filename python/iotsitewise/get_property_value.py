@@ -47,8 +47,9 @@ def extract_property_data(property_value):
 
 
 def print_success_entries(entries):
-    if len(entries) == 1 and 'assetPropertyValue' in entries[0]:
-        dt, value, quality = extract_property_data(entries[0]['assetPropertyValue'])
+    if len(entries) == 1:
+        dt, value, quality = extract_property_data(entries[0]['assetPropertyValue']) \
+                if 'assetPropertyValue' in entries[0] else '-', '-', '-'
         print('Timestamp:', dt)
         print('Value:    ', value)
         print('Quality:  ', quality)

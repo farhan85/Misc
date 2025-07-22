@@ -35,8 +35,6 @@ INFRA_FILE='cloudformation/grafana_infra.yaml'
 INSTANCE_TYPE='t2.micro'
 EC2_KEY_NAME='...'
 PREFIX_LIST='pl-...'
-EC2_KEY_NAME='bigmac-ssh-key'
-PREFIX_LIST='pl-09d8014b8b598e0ad'
 
 
 ami_id=$(aws ec2 describe-images \
