@@ -5,6 +5,7 @@ This package contains the following scripts to do the following:
   SiteWise property values to CloudWatch metrics
 - `create-sitewise-resources`: Creates the SiteWise AssetModels and Assets
 - `grafana-stack`: Creates a Grafana server on an EC2 instance for building a SiteWise dashboard
+- `run-sql-queries`: Runs example SQL queries using the SiteWise API
 
 
 ## Setting up dev environment
@@ -54,6 +55,12 @@ visiting the [AWS IoT SiteWise console](https://console.aws.amazon.com/iotsitewi
 
 Metrics for the top-level Assets are also being forwarded to CloudWatch (using the custom namespace
 "IoTSiteWise/AssetMetrics"), where you can create dashboards and set up alarms.
+
+You can also run example SQL queries using the ExecuteQuery API:
+
+```
+./run-sql-queries -d <resources DB file>
+```
 
 
 ## Creating Grafana dashboards
