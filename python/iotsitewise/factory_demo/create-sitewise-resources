@@ -33,6 +33,8 @@ fi
 meas_gen_function_name=$(echo "$cfn_output" | awk '/MeasurementGenLambdaName/ {print $2}')
 meas_gen_invoker_rule=$(echo "$cfn_output" | awk '/MeasurementGenInvokerRuleName/ {print $2}')
 cw_sender_function_name=$(echo "$cfn_output" | awk '/CloudWatchSenderLambdaName/ {print $2}')
+cw_alarm_sw_sender_function_name=$(echo "$cfn_output" | awk '/CWAlarmSiteWiseSenderLambdaName/ {print $2}')
+cw_alarm_sns_topic_arn=$(echo "$cfn_output" | awk '/CWALarmMonitoringSNSTopicArn/ {print $2}')
 
 
 # Write config to DB file (in the format used by the Python TinyDB lib)
@@ -43,6 +45,8 @@ config=$(jq -n \
     --arg meas_gen_lambda $meas_gen_function_name \
     --arg meas_gen_invoker $meas_gen_invoker_rule \
     --arg cw_sender_lambda $cw_sender_function_name \
+    --arg cw_alarm_sender_lambda $cw_alarm_sw_sender_function_name \
+    --arg cw_alarm_sns_topic $cw_alarm_sns_topic_arn \
     --arg nsites $num_sites \
     --arg ngenerators $num_generators \
     '{
@@ -51,6 +55,8 @@ config=$(jq -n \
        meas_gen_function_name: $meas_gen_lambda,
        meas_gen_invoker_rule: $meas_gen_invoker,
        cw_sender_function_name: $cw_sender_lambda,
+       cw_alarm_sw_sender_function_name: $cw_alarm_sender_lambda,
+       cw_alarm_sns_topic_arn: $cw_alarm_sns_topic,
        num_sites: ($nsites|tonumber),
        num_generators: ($ngenerators|tonumber)
      }')
@@ -70,8 +76,9 @@ set -e
 python sitewise/create_asset_models.py -d $db_file
 python sitewise/create_assets.py -d $db_file
 python sitewise/associate_assets.py -d $db_file
-
 python lambda/update_lambdas.py -d $db_file
+python sitewise/create_cw_alarm.py -d $db_file
+
 echo 'Command to start MeasurementGenInvoker:'
 echo "> ./enable-meas-gen -d $db_file --start"
 

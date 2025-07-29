@@ -73,6 +73,9 @@ def main(db_filename):
     print('Stopping MeasurementGenInvoker')
     cw_events.disable_rule(Name=config['meas_gen_invoker_rule'])
 
+    print('Deleting CW Alarms')
+    cw_client.delete_alarms(AlarmNames=['PowerRateAlarm'])
+
     for a in associations:
         parent_name = assets.get(Asset.id == a['parent_id'])['name']
         child_name = assets.get(Asset.id == a['child_id'])['name']

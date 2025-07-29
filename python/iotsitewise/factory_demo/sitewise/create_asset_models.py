@@ -18,6 +18,7 @@ SITE_TEMP_PROP_NAME = 'temperature_avg'
 SITE_HIERARCHY_NAME = 'hierarchy_1'
 FACTORY_HIERARCHY_NAME = 'hierarchy_1'
 POWER_RATE_PROP_NAME = 'power_rate'
+ALARM_PROP_NAME = f'{POWER_RATE_PROP_NAME}_alarm'
 
 
 def wait_for_asset_model_active(sitewise, asset_model_id, asset_model_name):
@@ -156,7 +157,27 @@ def create_factory_asset_model(name_prefix, child_model_id, power_prop_id, temp_
                 }
             }
         ],
-        'assetModelCompositeModels': [],
+        'assetModelCompositeModels': [
+            {
+                'name': ALARM_PROP_NAME,
+                'type': 'AWS/ALARM',
+                'properties': [
+                    {
+                        'name': 'AWS/ALARM_TYPE',
+                        'dataType': 'STRING',
+                        'unit': 'none',
+                        'type': { 'attribute': { 'defaultValue': 'EXTERNAL' } }
+                    },
+                    {
+                        'name': 'AWS/ALARM_STATE',
+                        'dataType': 'STRUCT',
+                        'dataTypeSpec': 'AWS/ALARM_STATE',
+                        'unit': 'none',
+                        'type': { 'measurement': {} }
+                    }
+                ]
+            }
+        ],
         'assetModelHierarchies': [
             { 'name': FACTORY_HIERARCHY_NAME, 'childAssetModelId': child_model_id }
         ]
@@ -172,6 +193,12 @@ def create_asset_model(sitewise, asset_model_spec):
 
 def get_prop_id(asset_model, prop_name):
     return next(p for p in asset_model.get('assetModelProperties', []) if p['name'] == prop_name)['id']
+
+
+def get_alarm_prop_id(asset_model, alarm_name):
+    for composite_model in asset_model['assetModelCompositeModels']:
+        if composite_model['name'] == alarm_name:
+            return next(p for p in composite_model['properties'] if p['name'] == 'AWS/ALARM_STATE')['id']
 
 
 def get_hierarchy_id(asset_model, hierarchy_name):
@@ -229,6 +256,7 @@ def main(db_filename):
             'name': factory_model['assetModelName'],
             'power_rate_prop_id': get_prop_id(factory_model, POWER_RATE_PROP_NAME),
             'hierarchy_id': get_hierarchy_id(factory_model, FACTORY_HIERARCHY_NAME),
+            'alarm_state_prop_id': get_alarm_prop_id(factory_model, ALARM_PROP_NAME),
         }
         models.insert(factory_model)
         wait_for_asset_model_active(sitewise, factory_model['id'], factory_model['name'])

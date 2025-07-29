@@ -1,7 +1,7 @@
 Description: Generates test measurement data and redirects data to CloudWatch for monitoring
 
 Resources:
-  MeasurementGenRole:
+  SiteWiseBatchPutRole:
     Type: AWS::IAM::Role
     Properties:
       AssumeRolePolicyDocument:
@@ -76,7 +76,7 @@ Resources:
     Properties:
       Handler: index.handler
       Runtime: python3.12
-      Role: !GetAtt MeasurementGenRole.Arn
+      Role: !GetAtt SiteWiseBatchPutRole.Arn
       Code:
         # Code will be updated with a separate script
         ZipFile: 'def handler(event, context): pass'
@@ -91,6 +91,16 @@ Resources:
         # Code will be updated with a separate script
         ZipFile: 'def handler(event, context): pass'
 
+  CWAlarmSiteWiseSenderLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.12
+      Role: !GetAtt SiteWiseBatchPutRole.Arn
+      Code:
+        # Code will be updated with a separate script
+        ZipFile: 'def handler(event, context): pass'
+
   MeasurementGenLogGroup:
     Type: AWS::Logs::LogGroup
     Properties:
@@ -101,6 +111,12 @@ Resources:
     Type: AWS::Logs::LogGroup
     Properties:
       LogGroupName: !Sub "/aws/lambda/${CloudWatchSenderLambda}"
+      RetentionInDays: 1
+
+  CWAlarmSiteWiseSenderLambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${CWAlarmSiteWiseSenderLambda}"
       RetentionInDays: 1
 
   MeasurementGenInvokerRule:
@@ -121,6 +137,16 @@ Resources:
           - Lambda:
               FunctionArn: !GetAtt CloudWatchSenderLambda.Arn
 
+  CWALarmMonitoringSNSTopic:
+    Type: AWS::SNS::Topic
+
+  CWAlarmMonitoringSNSTopicSubscription:
+    Type: AWS::SNS::Subscription
+    Properties:
+      Protocol: lambda
+      TopicArn: !Ref CWALarmMonitoringSNSTopic
+      Endpoint: !GetAtt CWAlarmSiteWiseSenderLambda.Arn
+
   MeasurementGenInvokerPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -137,6 +163,14 @@ Resources:
       Principal: iot.amazonaws.com
       SourceArn: !GetAtt SiteWiseAssetPropertyListenerTopicRule.Arn
 
+  CWAlarmSiteWiseSenderPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref CWAlarmSiteWiseSenderLambda
+      Principal: sns.amazonaws.com
+      SourceArn: !Ref CWALarmMonitoringSNSTopic
+
 Outputs:
   MeasurementGenInvokerRuleName:
     Value: !Ref MeasurementGenInvokerRule
@@ -144,3 +178,7 @@ Outputs:
     Value: !Ref MeasurementGenLambda
   CloudWatchSenderLambdaName:
     Value: !Ref CloudWatchSenderLambda
+  CWAlarmSiteWiseSenderLambdaName:
+    Value: !Ref CWAlarmSiteWiseSenderLambda
+  CWALarmMonitoringSNSTopicArn:
+    Value: !Ref CWALarmMonitoringSNSTopic

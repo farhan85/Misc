@@ -1,0 +1,87 @@
+#!/usr/bin/env python3
+
+import boto3
+import json
+import re
+import time
+from botocore.exceptions import ClientError
+from dateutil.parser import parse
+
+
+DATAPOINT_PATTERN = re.compile(r'\[([\d.]+)')
+ASSET_ID = '{{ asset_id }}'
+ALARM_STATE_PROPERTY_ID = '{{ alarm_state_prop_id }}'
+ALARM_STATE_MAP = {
+    'ALARM': 'Active',
+    'OK': 'Normal',
+    'INSUFFICIENT_DATA': 'Normal',
+}
+OPERATOR_MAP = {
+    'LessThanThreshold': 'LESS',
+    'LessThanOrEqualToThreshold': 'LESS_OR_EQUAL',
+    'GreaterThanOrEqualToThreshold': 'GREATER_OR_EQUAL',
+    'GreaterThanThreshold': 'GREATER',
+}
+
+
+def new_alarm_value(alarm_state, property_value=None, operator=None, threshold_value=None):
+    alarm_value = { 'stateName': alarm_state }
+    if property_value is not None:
+        alarm_value['ruleEvaluation'] = {
+            'simpleRule': {
+                'inputProperty': property_value,
+                'operator': operator,
+                'threshold': threshold_value
+            }
+        }
+    return alarm_value
+
+
+def new_entry(entry_id, timestamp_sec, alarm_value):
+    return {
+        'entryId': str(entry_id),
+        'assetId': ASSET_ID,
+        'propertyId': ALARM_STATE_PROPERTY_ID,
+        'propertyValues': [{
+            'value': { 'stringValue': json.dumps(alarm_value)},
+            'timestamp': {'timeInSeconds': timestamp_sec}
+        }]
+    }
+
+
+def to_entry(record_id, record):
+    message = json.loads(record['Sns']['Message'])
+    dt = parse(message['StateChangeTime'])
+    cw_alarm_state = message['NewStateValue']
+    sw_alarm_state = ALARM_STATE_MAP[cw_alarm_state]
+    match = DATAPOINT_PATTERN.search(message['NewStateReason'])
+    if match:
+        property_value = float(match.group(1))
+        threshold_value = message['Trigger']['Threshold']
+        cw_operator = message['Trigger']['ComparisonOperator']
+        sw_operator = OPERATOR_MAP[cw_operator]
+        alarm_value = new_alarm_value(sw_alarm_state, property_value, sw_operator, threshold_value)
+    else:
+        alarm_value = new_alarm_value(sw_alarm_state)
+    return new_entry(record_id, int(dt.timestamp()), alarm_value)
+
+
+def chunks(lst, n=10):
+    for i in range(0, len(lst), n):
+        yield lst[i:i+n]
+
+
+def handler(event, context):
+    print('Event:', event)
+    sitewise_client = boto3.client(service_name='iotsitewise', region_name='{{ region }}')
+
+    entries = [to_entry(idx, record) for idx, record in enumerate(event['Records'])]
+    for batch in chunks(entries):
+        print('Sending batch to Sitewise:', batch)
+        try:
+            response = sitewise_client.batch_put_asset_property_value(entries=batch)
+        except ClientError as e:
+            print('ERROR: Failed to send data to SiteWise')
+            response = e.response
+        print('Response:', response)
+        time.sleep(0.5)
