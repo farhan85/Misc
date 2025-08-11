@@ -11,14 +11,9 @@ Model = Query()
 
 GENERATOR_POWER_MEAS_PROP_NAME = 'power'
 GENERATOR_TEMP_MEAS_PROP_NAME = 'temperature_f'
-GENERATOR_POWER_PROP_NAME = 'power_avg'
-GENERATOR_TEMP_PROP_NAME = 'temperature_avg'
-SITE_POWER_PROP_NAME = 'power_max'
-SITE_TEMP_PROP_NAME = 'temperature_avg'
 SITE_HIERARCHY_NAME = 'hierarchy_1'
+FACTORY_ALARM_PROP_NAME = 'power_rate_alarm'
 FACTORY_HIERARCHY_NAME = 'hierarchy_1'
-POWER_RATE_PROP_NAME = 'power_rate'
-ALARM_PROP_NAME = f'{POWER_RATE_PROP_NAME}_alarm'
 
 
 def wait_for_asset_model_active(sitewise, asset_model_id, asset_model_name):
@@ -36,31 +31,17 @@ def wait_for_asset_model_active(sitewise, asset_model_id, asset_model_name):
 
 def create_generator_asset_model(name_prefix):
     return {
-        'assetModelName': f'{name_prefix}-GeneratorModel',
+        'assetModelName': f'{name_prefix}-Generator-Model',
         'assetModelDescription': 'Generator with raw power/temperature measurements',
         'assetModelProperties': [
             {
-                'name': GENERATOR_POWER_MEAS_PROP_NAME,
+                'name': GENERATOR_POWER_MEAS_PROP_NAME ,
                 'dataType': 'DOUBLE',
                 'unit': 'Watts',
                 'type': { 'measurement': {} }
             },
             {
-                'name': GENERATOR_POWER_PROP_NAME,
-                'dataType': 'DOUBLE',
-                'unit': 'Watts',
-                'type': {
-                    'metric': {
-                        'expression': 'avg(p)',
-                        'variables': [
-                            { 'name': 'p', 'value':  { 'propertyId':  'power' } }
-                        ],
-                        'window': { 'tumbling': { 'interval': '1m' } }
-                    }
-                }
-            },
-            {
-                'name': GENERATOR_TEMP_MEAS_PROP_NAME,
+                'name': GENERATOR_TEMP_MEAS_PROP_NAME ,
                 'dataType': 'DOUBLE',
                 'unit': 'Fahrenheit',
                 'type': { 'measurement': {} }
@@ -73,22 +54,8 @@ def create_generator_asset_model(name_prefix):
                     'transform': {
                         'expression': '(f - 32.0)*(5.0/9.0)',
                         'variables': [
-                            { 'name': 'f', 'value':  { 'propertyId':  'temperature_f' } }
+                            { 'name': 'f', 'value': { 'propertyId': 'temperature_f' } }
                         ]
-                    }
-                }
-            },
-            {
-                'name': GENERATOR_TEMP_PROP_NAME,
-                'dataType': 'DOUBLE',
-                'unit': 'Celsius',
-                'type': {
-                    'metric': {
-                        'expression': 'avg(t)',
-                        'variables': [
-                            { 'name': 't', 'value':  { 'propertyId':  'temperature_c' } }
-                        ],
-                        'window': { 'tumbling': { 'interval': '1m' } }
                     }
                 }
             }
@@ -96,70 +63,25 @@ def create_generator_asset_model(name_prefix):
     }
 
 
-def create_site_asset_model(name_prefix, child_model_id, power_prop_id, temp_prop_id):
+def create_site_asset_model(name_prefix, child_model_id):
     return {
-        'assetModelName': f'{name_prefix}-SiteModel',
+        'assetModelName': f'{name_prefix}-Site-Model',
         'assetModelDescription': 'Site with multiple generators',
-        'assetModelProperties': [
-            {
-                'name': SITE_POWER_PROP_NAME,
-                'dataType': 'DOUBLE',
-                'unit': 'Watts',
-                'type': {
-                    'metric': {
-                        'expression': 'max(p)',
-                        'variables': [
-                            { 'name': 'p', 'value':  { 'propertyId':  power_prop_id, 'hierarchyId':  SITE_HIERARCHY_NAME } }
-                        ],
-                        'window': { 'tumbling': { 'interval': '1m' } }
-                    }
-                }
-            },
-            {
-                'name': SITE_TEMP_PROP_NAME,
-                'dataType': 'DOUBLE',
-                'unit': 'Celsius',
-                'type': {
-                    'metric': {
-                        'expression': 'avg(t)',
-                        'variables': [
-                            { 'name': 't', 'value':  { 'propertyId':  temp_prop_id, 'hierarchyId':  SITE_HIERARCHY_NAME } }
-                        ],
-                        'window': { 'tumbling': { 'interval': '1m' } }
-                    }
-                }
-            }
-        ],
+        'assetModelProperties': [],
         'assetModelHierarchies': [
             { 'name': SITE_HIERARCHY_NAME, 'childAssetModelId': child_model_id }
         ]
     }
 
 
-def create_factory_asset_model(name_prefix, child_model_id, power_prop_id, temp_prop_id):
+def create_factory_asset_model(name_prefix, child_model_id):
     return {
-        'assetModelName': f'{name_prefix}-FactoryModel',
+        'assetModelName': f'{name_prefix}-Factory-Model',
         'assetModelDescription': 'Factory with multiple sites',
-        'assetModelProperties': [
-            {
-                'name': POWER_RATE_PROP_NAME,
-                'dataType': 'DOUBLE',
-                'unit': 'W/C',
-                'type': {
-                    'metric': {
-                        'expression': 'avg(p)/avg(t)',
-                        'variables': [
-                            { 'name': 'p', 'value':  { 'propertyId':  power_prop_id, 'hierarchyId':  FACTORY_HIERARCHY_NAME } },
-                            { 'name': 't', 'value':  { 'propertyId':  temp_prop_id, 'hierarchyId':  FACTORY_HIERARCHY_NAME } }
-                        ],
-                        'window': { 'tumbling': { 'interval': '1m' } }
-                    }
-                }
-            }
-        ],
+        'assetModelProperties': [],
         'assetModelCompositeModels': [
             {
-                'name': ALARM_PROP_NAME,
+                'name': FACTORY_ALARM_PROP_NAME,
                 'type': 'AWS/ALARM',
                 'properties': [
                     {
@@ -203,7 +125,7 @@ def to_db_item(asset_model, asset_model_type):
     }
 
 
-def get_or_create_model(sitewise, model_db, asset_model_type, model_spec):
+def new_asset_model(sitewise, model_db, asset_model_type, model_spec):
     model = model_db.get(Model.type == asset_model_type)
     if model is None:
         model = create_asset_model(sitewise, model_spec)
@@ -224,15 +146,13 @@ def main(db_filename):
     sitewise = boto3.client('iotsitewise', region_name=config['region'])
 
     model_spec = create_generator_asset_model(prefix)
-    generator_model = get_or_create_model(sitewise, models, 'generator', model_spec)
+    generator_model = new_asset_model(sitewise, models, 'generator', model_spec)
 
-    model_spec = create_site_asset_model(prefix, generator_model['id'],
-        generator_model['property_id'][GENERATOR_POWER_PROP_NAME], generator_model['property_id'][GENERATOR_TEMP_PROP_NAME])
-    site_model = get_or_create_model(sitewise, models, 'site', model_spec)
+    model_spec = create_site_asset_model(prefix, generator_model['id'])
+    site_model = new_asset_model(sitewise, models, 'site', model_spec)
 
-    model_spec = create_factory_asset_model(prefix, site_model['id'],
-        site_model['property_id'][SITE_POWER_PROP_NAME], site_model['property_id'][SITE_TEMP_PROP_NAME])
-    factory_model = get_or_create_model(sitewise, models, 'factory', model_spec)
+    model_spec = create_factory_asset_model(prefix, site_model['id'])
+    factory_model = new_asset_model(sitewise, models, 'factory', model_spec)
 
 
 if __name__ == '__main__':

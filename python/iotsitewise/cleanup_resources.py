@@ -124,6 +124,9 @@ def topological_sort(asset_models):
         # Parent models must be deleted before child models
         for child_id in (h['childAssetModelId'] for h in am['assetModelHierarchies']):
             adjancy_graph.setdefault(child_id, set()).add(am_id)
+        # Asset models must be deleted before interfaces
+        for int_id in (i['id'] for i in am.get('interfaceDetails', [])):
+            adjancy_graph.setdefault(int_id, set()).add(am_id)
 
     while adjancy_graph:
         next_batch = set(am_id for am_id, child_ids in adjancy_graph.items() if len(child_ids) == 0)

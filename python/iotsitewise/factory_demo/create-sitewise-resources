@@ -74,6 +74,7 @@ fi
 set -e
 
 python sitewise/create_asset_models.py -d $db_file
+python sitewise/create_interfaces.py -d $db_file
 python sitewise/create_assets.py -d $db_file
 python sitewise/associate_assets.py -d $db_file
 python lambda/update_lambdas.py -d $db_file

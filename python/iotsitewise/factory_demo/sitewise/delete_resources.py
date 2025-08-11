@@ -8,6 +8,7 @@ from tinydb import TinyDB, Query
 
 # Use Query objects to make ORM-style DB queries
 Model = Query()
+Interface = Query()
 Asset = Query()
 Association = Query()
 
@@ -64,6 +65,7 @@ def main(db_filename):
     db = TinyDB(db_filename)
     config = db.table('config').get(doc_id=1)
     models = db.table('models')
+    interfaces = db.table('interfaces')
     assets = db.table('assets')
     associations = db.table('associations')
 
@@ -101,6 +103,17 @@ def main(db_filename):
             delete_asset_model(sitewise, model_id, model_name)
             wait_for_asset_model_deleted(sitewise, model_id, model_name)
             models.remove(Model.id == model_id)
+
+    factory_interface = interfaces.get(Interface.type == 'factory')
+    site_interface = interfaces.get(Interface.type == 'site')
+    generator_interface = interfaces.get(Interface.type == 'generator')
+
+    for interface in (factory_interface, site_interface, generator_interface):
+        if interface:
+            interface_id, interface_name = interface['id'], interface['name']
+            delete_asset_model(sitewise, interface_id, interface_name)
+            wait_for_asset_model_deleted(sitewise, interface_id, interface_name)
+            interfaces.remove(Interface.id == interface_id)
 
 if __name__ == '__main__':
     main()
