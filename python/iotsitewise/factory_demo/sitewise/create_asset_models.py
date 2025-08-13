@@ -191,18 +191,26 @@ def create_asset_model(sitewise, asset_model_spec):
     return sitewise.describe_asset_model(assetModelId=asset_model_id)
 
 
-def get_prop_id(asset_model, prop_name):
-    return next(p for p in asset_model.get('assetModelProperties', []) if p['name'] == prop_name)['id']
+def to_db_item(asset_model, asset_model_type):
+    return {
+        'type': asset_model_type,
+        'id': asset_model['assetModelId'],
+        'name': asset_model['assetModelName'],
+        'property_id': {p['name']: p['id'] for p in asset_model['assetModelProperties']},
+        'composite_model_property_id': {cm['name']: {p['name']: p['id'] for p in cm['properties']}
+                                        for cm in asset_model.get('assetModelCompositeModels', [])},
+        'hierarchy_id': asset_model['assetModelHierarchies'][0]['id'] if asset_model['assetModelHierarchies'] else None,
+    }
 
 
-def get_alarm_prop_id(asset_model, alarm_name):
-    for composite_model in asset_model['assetModelCompositeModels']:
-        if composite_model['name'] == alarm_name:
-            return next(p for p in composite_model['properties'] if p['name'] == 'AWS/ALARM_STATE')['id']
-
-
-def get_hierarchy_id(asset_model, hierarchy_name):
-    return next(h for h in asset_model.get('assetModelHierarchies', []) if h['name'] == hierarchy_name)['id']
+def get_or_create_model(sitewise, model_db, asset_model_type, model_spec):
+    model = model_db.get(Model.type == asset_model_type)
+    if model is None:
+        model = create_asset_model(sitewise, model_spec)
+        model = to_db_item(model, asset_model_type)
+        model_db.insert(model)
+        wait_for_asset_model_active(sitewise, model['id'], model['name'])
+    return model
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
@@ -215,51 +223,16 @@ def main(db_filename):
 
     sitewise = boto3.client('iotsitewise', region_name=config['region'])
 
-    generator_model = models.get(Model.type == 'generator')
-    if generator_model is None:
-        generator_model = create_generator_asset_model(prefix)
-        generator_model = create_asset_model(sitewise, generator_model)
-        generator_model = {
-            'type': 'generator',
-            'id': generator_model['assetModelId'],
-            'name': generator_model['assetModelName'],
-            'power_meas_prop_id': get_prop_id(generator_model, GENERATOR_POWER_MEAS_PROP_NAME),
-            'temp_meas_prop_id': get_prop_id(generator_model, GENERATOR_TEMP_MEAS_PROP_NAME),
-            'power_prop_id': get_prop_id(generator_model, GENERATOR_POWER_PROP_NAME),
-            'temp_prop_id': get_prop_id(generator_model, GENERATOR_TEMP_PROP_NAME),
-        }
-        models.insert(generator_model)
-        wait_for_asset_model_active(sitewise, generator_model['id'], generator_model['name'])
+    model_spec = create_generator_asset_model(prefix)
+    generator_model = get_or_create_model(sitewise, models, 'generator', model_spec)
 
-    site_model = models.get(Model.type == 'site')
-    if site_model  is None:
-        site_model = create_site_asset_model(prefix, generator_model['id'], generator_model['power_prop_id'], generator_model['temp_prop_id'])
-        site_model = create_asset_model(sitewise, site_model)
-        site_model = {
-            'type': 'site',
-            'id': site_model['assetModelId'],
-            'name': site_model['assetModelName'],
-            'power_prop_id': get_prop_id(site_model, SITE_POWER_PROP_NAME),
-            'temp_prop_id': get_prop_id(site_model, SITE_TEMP_PROP_NAME),
-            'hierarchy_id': get_hierarchy_id(site_model, SITE_HIERARCHY_NAME),
-        }
-        models.insert(site_model)
-        wait_for_asset_model_active(sitewise, site_model['id'], site_model['name'])
+    model_spec = create_site_asset_model(prefix, generator_model['id'],
+        generator_model['property_id'][GENERATOR_POWER_PROP_NAME], generator_model['property_id'][GENERATOR_TEMP_PROP_NAME])
+    site_model = get_or_create_model(sitewise, models, 'site', model_spec)
 
-    factory_model = models.get(Model.type == 'factory')
-    if models.get(Model.type == 'factory')  is None:
-        factory_model = create_factory_asset_model(prefix, site_model['id'], site_model['power_prop_id'], site_model['temp_prop_id'])
-        factory_model = create_asset_model(sitewise, factory_model)
-        factory_model = {
-            'type': 'factory',
-            'id': factory_model['assetModelId'],
-            'name': factory_model['assetModelName'],
-            'power_rate_prop_id': get_prop_id(factory_model, POWER_RATE_PROP_NAME),
-            'hierarchy_id': get_hierarchy_id(factory_model, FACTORY_HIERARCHY_NAME),
-            'alarm_state_prop_id': get_alarm_prop_id(factory_model, ALARM_PROP_NAME),
-        }
-        models.insert(factory_model)
-        wait_for_asset_model_active(sitewise, factory_model['id'], factory_model['name'])
+    model_spec = create_factory_asset_model(prefix, site_model['id'],
+        site_model['property_id'][SITE_POWER_PROP_NAME], site_model['property_id'][SITE_TEMP_PROP_NAME])
+    factory_model = get_or_create_model(sitewise, models, 'factory', model_spec)
 
 
 if __name__ == '__main__':

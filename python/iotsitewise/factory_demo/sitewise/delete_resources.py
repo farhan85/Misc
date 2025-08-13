@@ -69,6 +69,7 @@ def main(db_filename):
 
     sitewise = boto3.client('iotsitewise', region_name=config['region'])
     cw_events = boto3.client('events', region_name=config['region'])
+    cw_client = boto3.client('cloudwatch', region_name=config['region'])
 
     print('Stopping MeasurementGenInvoker')
     cw_events.disable_rule(Name=config['meas_gen_invoker_rule'])

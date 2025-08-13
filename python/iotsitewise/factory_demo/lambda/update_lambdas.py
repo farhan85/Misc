@@ -22,7 +22,7 @@ def update_measurement_gen_lambda(lambda_client, lambda_function_name, template_
     generator_assets = list(assets_db.search(Asset.type == 'generator'))
 
     asset_ids = [a['id'] for a in generator_assets]
-    prop_ids = [generator_model['power_meas_prop_id'], generator_model['temp_meas_prop_id']]
+    prop_ids = [generator_model['property_id'][prop_name] for prop_name in ['power', 'temperature_f']]
 
     template = template_env.get_template('measurement_gen.py.jinja')
     meas_gen_code = template.render(asset_properties=itertools.product(asset_ids, prop_ids),
@@ -54,7 +54,7 @@ def update_cw_alarm_sitewise_sender_lambda(lambda_client, lambda_function_name, 
     lambda_code_template = template_env.get_template('cw_alarm_to_sitewise.py.j2')
     sw_alarm_sender_code = lambda_code_template.render(
         asset_id=factory_asset['id'],
-        alarm_state_prop_id=factory_model['alarm_state_prop_id'],
+        alarm_state_prop_id=factory_model['composite_model_property_id']['power_rate_alarm']['AWS/ALARM_STATE'],
         region=region)
 
     memory_file = BytesIO()

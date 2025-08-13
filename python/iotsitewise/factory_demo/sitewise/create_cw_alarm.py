@@ -26,7 +26,7 @@ def main(db_filename):
     factory_asset = assets.get(Asset.type == 'factory')
 
     asset_id = factory_asset['id']
-    property_id = factory_model['power_rate_prop_id']
+    property_id = factory_model['property_id']['power_rate']
     sns_arn = config['cw_alarm_sns_topic_arn']
 
     cw_client.put_metric_alarm(

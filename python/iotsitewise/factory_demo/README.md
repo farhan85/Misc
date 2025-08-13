@@ -56,10 +56,17 @@ visiting the [AWS IoT SiteWise console](https://console.aws.amazon.com/iotsitewi
 Metrics for the top-level Assets are also being forwarded to CloudWatch (using the custom namespace
 "IoTSiteWise/AssetMetrics"), where you can create dashboards and set up alarms.
 
+You can view the latest values using the following script, which retrieves the latest values
+for all properties of all assets every 30 seconds.
+
+```
+> ./list-property-values -d <resources DB file>
+```
+
 You can also run example SQL queries using the ExecuteQuery API:
 
 ```
-./run-sql-queries -d <resources DB file>
+> ./run-sql-queries -d <resources DB file>
 ```
 
 

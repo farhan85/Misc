@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+
+PYTHON='/home/ahammedf/.pyenv/shims/python'
+
+db_file="resources_${AWS_DEFAULT_REGION}.json"
+while getopts 'd:sh' OPT; do
+    case "$OPT" in
+        d)  db_file="$OPTARG" ;;
+        h)  echo 'Args: [-d <db-file>]'
+            exit 0 ;;
+        *)  echo 'Invalid args error' ; exit 2 ;;
+    esac
+done
+shift $((OPTIND - 1))
+
+[[ -f "$db_file" ]] || { echo "DB file '${db_file}' does not exist"; exit; }
+
+while true; do
+    $PYTHON sitewise/asset_property_values.py -d $db_file
+    echo
+    sleep 30
+done

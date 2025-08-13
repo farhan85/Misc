@@ -37,7 +37,7 @@ def new_asset(sitewise, assets_db, model, asset_name):
     if not assets_db.contains((Asset.type == model['type']) & (Asset.name == asset_name)):
         asset_id = create_asset(sitewise, model['id'], asset_name)
         asset = {'type': model['type'], 'id': asset_id, 'name': asset_name, 'model_id': model['id']}
-        if 'hierarchy_id' in model:
+        if model['hierarchy_id'] is not None:
             asset['hierarchy_id'] = model['hierarchy_id']
         assets_db.insert(asset)
         return asset_id
@@ -88,8 +88,8 @@ def main(db_filename):
         wait_for_asset_active(sitewise, asset_id, asset_name)
 
     # Enable notifications for properties that will be forwarded to CloudWatch for monitoring
-    prop_name = 'power_rate_prop_id'
-    prop_id = factory_model[prop_name]
+    prop_name = 'power_rate'
+    prop_id = factory_model['property_id'][prop_name]
     enable_notifications(sitewise, factory_asset_name, factory_asset_id, prop_name, prop_id)
 
 
