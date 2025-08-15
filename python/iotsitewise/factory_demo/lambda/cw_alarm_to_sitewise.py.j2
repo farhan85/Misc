@@ -9,8 +9,6 @@ from dateutil.parser import parse
 
 
 DATAPOINT_PATTERN = re.compile(r'\[([\d.]+)')
-ASSET_ID = '{{ asset_id }}'
-ALARM_STATE_PROPERTY_ID = '{{ alarm_state_prop_id }}'
 ALARM_STATE_MAP = {
     'ALARM': 'Active',
     'OK': 'Normal',
@@ -37,11 +35,11 @@ def new_alarm_value(alarm_state, property_value=None, operator=None, threshold_v
     return alarm_value
 
 
-def new_entry(entry_id, timestamp_sec, alarm_value):
+def new_entry(entry_id, timestamp_sec, asset_id, property_id, alarm_value):
     return {
         'entryId': str(entry_id),
-        'assetId': ASSET_ID,
-        'propertyId': ALARM_STATE_PROPERTY_ID,
+        'assetId': asset_id,
+        'propertyId': property_id,
         'propertyValues': [{
             'value': { 'stringValue': json.dumps(alarm_value)},
             'timestamp': {'timeInSeconds': timestamp_sec}
@@ -49,7 +47,7 @@ def new_entry(entry_id, timestamp_sec, alarm_value):
     }
 
 
-def to_entry(record_id, record):
+def to_entry(cw_client, record_id, record):
     message = json.loads(record['Sns']['Message'])
     dt = parse(message['StateChangeTime'])
     cw_alarm_state = message['NewStateValue']
@@ -63,7 +61,11 @@ def to_entry(record_id, record):
         alarm_value = new_alarm_value(sw_alarm_state, property_value, sw_operator, threshold_value)
     else:
         alarm_value = new_alarm_value(sw_alarm_state)
-    return new_entry(record_id, int(dt.timestamp()), alarm_value)
+
+    response = cw_client.list_tags_for_resource(ResourceARN=message['AlarmArn'])
+    asset_id = [tag['Value'] for tag in response['Tags'] if tag['Key'] == 'alarm_asset_id'][0]
+    property_id = [tag['Value'] for tag in response['Tags'] if tag['Key'] == 'alarm_property_id'][0]
+    return new_entry(record_id, int(dt.timestamp()), asset_id, property_id, alarm_value)
 
 
 def chunks(lst, n=10):
@@ -73,9 +75,10 @@ def chunks(lst, n=10):
 
 def handler(event, context):
     print('Event:', event)
-    sitewise_client = boto3.client(service_name='iotsitewise', region_name='{{ region }}')
+    sitewise_client = boto3.client(service_name='iotsitewise')
+    cw_client = boto3.client(service_name='cloudwatch')
 
-    entries = [to_entry(idx, record) for idx, record in enumerate(event['Records'])]
+    entries = [to_entry(cw_client, idx, record) for idx, record in enumerate(event['Records'])]
     for batch in chunks(entries):
         print('Sending batch to Sitewise:', batch)
         try:

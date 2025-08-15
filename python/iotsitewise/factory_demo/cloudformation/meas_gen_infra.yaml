@@ -35,6 +35,13 @@ Resources:
               - logs:CreateLogStream
               - logs:PutLogEvents
             Resource: '*'
+      - PolicyName: CloudWatchMetricsPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+          - Effect: Allow
+            Action: cloudwatch:ListTagsForResource
+            Resource: '*'
 
   CloudWatchSenderRole:
     Type: AWS::IAM::Role

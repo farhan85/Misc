@@ -27,6 +27,7 @@ def main(db_filename):
 
     asset_id = factory_asset['id']
     property_id = factory_model['property_id']['power_rate']
+    alarm_property_id = factory_model['composite_model_property_id']['power_rate_alarm']['AWS/ALARM_STATE']
     sns_arn = config['cw_alarm_sns_topic_arn']
 
     cw_client.put_metric_alarm(
@@ -45,7 +46,11 @@ def main(db_filename):
         ActionsEnabled=True,
         AlarmActions=[ sns_arn ],
         OKActions=[ sns_arn ],
-        InsufficientDataActions=[ sns_arn ]
+        InsufficientDataActions=[ sns_arn ],
+        Tags=[
+            { 'Key': 'alarm_asset_id', 'Value': asset_id },
+            { 'Key': 'alarm_property_id', 'Value': alarm_property_id },
+        ],
     )
     print(f'Created CloudWatch alarm on Asset {asset_id} Property {property_id}')
 
