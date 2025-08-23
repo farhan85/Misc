@@ -1,49 +1,54 @@
 import time
-from functools import lru_cache
 from datetime import datetime, timezone
-from limits import RateLimitItemPerSecond, storage, strategies
+from limits import parse, storage, strategies, RateLimitItemPerSecond
 
 
-ratelimiter = strategies.MovingWindowRateLimiter(storage.MemoryStorage())
-limit = RateLimitItemPerSecond(2)
+# This is the recommended rate limiter library to use based on the tests done here:
+# https://gist.github.com/justinvanwinkle/d9f04950083c4554835c1a35f9d22dad
 
 
-@lru_cache
-def get_limit(tps):
-    return RateLimitItemPerSecond(tps)
+class RateLimiter:
+    def __init__(self, rate_limit_map=None, rate_limit=None):
+        self.rate_limiter = strategies.MovingWindowRateLimiter(storage.MemoryStorage())
+        self.rate_limits = rate_limit_map
+        self.default_limit = rate_limit
 
+    @staticmethod
+    def tps(tps):
+        #return RateLimiter(rate_limit=parse(f'{tps}/second'))
+        return RateLimiter(rate_limit=RateLimitItemPerSecond(tps))
 
-def ratelimit(tps):
-    def inner(func):
-        def wrapper(*args, **kwargs):
-            while not ratelimiter.hit(get_limit(tps)):
-                window = ratelimiter.get_window_stats(limit)
-                time.sleep(window.reset_time - int(datetime.now(timezone.utc).timestamp()))
-            return func(*args, **kwargs)
-        return wrapper
-    return inner
+    @staticmethod
+    def tps_limits(tps_limits):
+        rate_limits = { limit_name: RateLimitItemPerSecond(tps) for limit_name, tps in tps_limits }
+        return RateLimiter(rate_limit_map=rate_limits)
 
-
-@ratelimit(3)
-def do_work():
-    print('{} - {}'.format(datetime.now(), 'Do more work'))
-
-
-print('Using RateLimiter object directly')
-for _ in range(10):
     # The namespace/identifier is only needed if the same limit needs to be used for multiple
     # independent resources (e.g. use the same limit for different resources, but don't let the
     # resources eat into each other's available limits)
-    while not ratelimiter.hit(limit, "namespace", "identifier"):
-        reset_time, _ = ratelimiter.get_window_stats(limit)
-        now = int(datetime.now(timezone.utc).timestamp())
-        diff = reset_time - now
-        print('{} - Waiting till {} ({} seconds)'.format(datetime.now(), reset_time, diff))
-        time.sleep(diff)
-    print('{} - {}'.format(datetime.now(), 'Do work'))
+    def wait(self, limit_name=None, *identifiers):
+        ratelimit = self.default_limit if limit_name is None else self.rate_limits[limit_name]
+        while not self.rate_limiter.hit(ratelimit, limit_name, *identifiers):
+            window_stats = self.rate_limiter.get_window_stats(ratelimit)
+            now = int(datetime.now(timezone.utc).timestamp())
+            time.sleep(window_stats.reset_time - now)
 
 
-print()
-print('Using wrapper')
-for _ in range(10):
-    do_work()
+if __name__ == '__main__':
+    r = RateLimiter.tps(3)
+    for _ in range(9):
+        r.wait()
+        print('{} - {}'.format(datetime.now(), 'Do work'))
+
+    limits = [('limitA', 1), ('limitB', 2)]
+    r = RateLimiter.tps_limits(limits)
+    for _ in range(5):
+        r.wait('limitA', 'resource1')
+        print('{} - {}'.format(datetime.now(), 'Do work - limitA/resource1'))
+        r.wait('limitA', 'resource2', 'component-x')
+        print('{} - {}'.format(datetime.now(), 'Do work - limitA/resource2/component-x'))
+        r.wait('limitA', 'resource2', 'component-y')
+        print('{} - {}'.format(datetime.now(), 'Do work - limitA/resource2/component-y'))
+    for _ in range(5):
+        r.wait('limitB')
+        print('{} - {}'.format(datetime.now(), 'Do work - limitB'))
