@@ -1,0 +1,247 @@
+# This stack is used to generate daily start words for people playing Wordle every day. A new start
+# word is chosen at the start of a work week, and a daily Slack thread is created for those playing
+# along to comment their results for that day.
+#
+# This is not production quality code, it's just a little self-contained system that people can
+# use for a bit of fun, for a few minutes a day..
+#
+# Words list used:
+#   https://github.com/dwyl/english-words/blob/master/words_alpha.txt
+#
+# Comand to Update stack:
+#   > aws cloudformation update-stack --stack-name DailyWordleGen \
+#                                     --capabilities CAPABILITY_IAM \
+#                                     --template-body 'file://daily_wordle_gen.yaml' \
+#                                     --parameters ParameterKey=Timestamp,ParameterValue=$(date +%s)
+#
+# Command to manually set current word:
+#   > echo 'new-word' | aws s3 cp - s3://<bucket>/latest.txt
+#
+# Command to view current word:
+#   > aws s3 cp s3://<bucket>/latest.txt -
+
+Description: Creates daily Wordle threads in a Slack channel
+
+Parameters:
+  Timestamp:
+    Type: String
+    Description: Supply a timestamp when updating this stack (to force the lambda to update)
+
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+
+  DailyThreadLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${DailyThreadLambda}"
+      RetentionInDays: 30
+
+  S3BucketCleanupLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${S3BucketCleanupLambda}"
+      RetentionInDays: 30
+
+  DailyThreadLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+      - PolicyName: LetCfnManageLogGroups
+        PolicyDocument:
+          Statement:
+          - Effect: Deny
+            Action: logs:CreateLogGroup
+            Resource: "*"
+      - PolicyName: DataBucketAccess
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:PutObject
+            - s3:ListBucket
+            Resource:
+            - !GetAtt DataBucket.Arn
+            - !Sub "${DataBucket.Arn}/*"
+
+  S3BucketCleanupLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+      - PolicyName: LetCfnManageLogGroups
+        PolicyDocument:
+          Statement:
+          - Effect: Deny
+            Action: logs:CreateLogGroup
+            Resource: "*"
+      - PolicyName: DataBucketAccess
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:DeleteObject
+            - s3:ListBucket
+            Resource:
+            - !GetAtt DataBucket.Arn
+            - !Sub "${DataBucket.Arn}/*"
+
+  DailyThreadScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: scheduler.amazonaws.com
+      Policies:
+      - PolicyName: LambdaInvokePolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource: !GetAtt DailyThreadLambda.Arn
+
+  DailyThreadSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      FlexibleTimeWindow:
+        MaximumWindowInMinutes: 5
+        Mode: FLEXIBLE
+      ScheduleExpression: 'cron(0 1 ? * * *)'
+      ScheduleExpressionTimezone: 'America/Los_Angeles'
+      State: ENABLED
+      Target:
+        Arn: !GetAtt DailyThreadLambda.Arn
+        RoleArn: !GetAtt DailyThreadScheduleRole.Arn
+
+  S3BucketCleanupLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.12
+      Role: !GetAtt S3BucketCleanupLambdaRole.Arn
+      Environment:
+        Variables:
+          # This env variable will always change, causing the Lambda to always be redeployed
+          DEPLOY_TIMESTAMP: !Ref Timestamp
+      Timeout: 30
+      Code:
+        ZipFile: |
+          import cfnresponse, boto3
+          def handler(event, context):
+              print('Event:', event)
+              try:
+                  if event['RequestType'] == 'Delete':
+                      bucket_name = event['ResourceProperties']['BucketName']
+                      s3 = boto3.resource('s3')
+                      bucket = s3.Bucket(bucket_name)
+                      bucket.objects.all().delete()
+                  cfnresponse.send(event, context, cfnresponse.SUCCESS, {})
+              except Exception as e:
+                cfnresponse.send(event, context, cfnresponse.FAILED, {}, reason=str(e))
+
+  BucketCleanup:
+    Type: Custom::BucketCleanup
+    Properties:
+      ServiceToken: !GetAtt S3BucketCleanupLambda.Arn
+      BucketName: !Ref DataBucket
+
+  DailyThreadLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: index.handler
+      Runtime: python3.12
+      Role: !GetAtt DailyThreadLambdaRole.Arn
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref DataBucket
+          # This env variable will always change, causing the Lambda to always be redeployed, so
+          # that any code change made here will always be updated in the Lambda.
+          DEPLOY_TIMESTAMP: !Ref Timestamp
+      Timeout: 60
+      Code:
+        ZipFile: |
+          import base64, boto3, dateutil.tz, json, os, random
+          from botocore.exceptions import ClientError
+          from datetime import datetime
+          from urllib.request import urlopen, Request
+          LOCAL_TZ = dateutil.tz.gettz('America/Los_Angeles')
+          WEBHOOK_URL = 'https://hooks.slack.com/workflows/...'
+          ALL_WORDS_URL = 'https://raw.githubusercontent.com/dwyl/english-words/master/words_alpha.txt'
+          ALL_WORDS_S3_KEY = 'all_words.txt'
+          LATEST_WORD_S3_KEY = 'latest.txt'
+          def s3_file_exists(s3, bucket, key):
+              try:
+                  s3.head_object(Bucket=bucket, Key=key)
+                  return True
+              except ClientError as e:
+                  if e.response['Error']['Code'] != '404':
+                      print('Error checking file exists:', e)
+                  return False
+          def update_all_words_file(s3, bucket, key):
+              with urlopen(ALL_WORDS_URL) as response:
+                  content = response.read()
+              s3.put_object(Bucket=bucket, Key=key, Body=content)
+          def random_word(s3, bucket, key):
+              response = s3.get_object(Bucket=bucket, Key=key)
+              words = list(line for line in response['Body'].iter_lines() if len(line) == 5)
+              return random.sample(words, 1)[0].decode().upper()
+          def send_to_slack(message):
+              data = json.dumps({'message': message}).encode('utf-8')
+              request = Request(WEBHOOK_URL, data=data)
+              request.add_header('Content-Type', 'application/json; charset=utf-8')
+              request.add_header('Content-Length', len(data))
+              with urlopen(request) as response:
+                  print('Sent to Slack. Response: {} {}'.format(response.getcode(), response.reason))
+          def set_current_word(s3, bucket, key, word):
+              s3.put_object(Body=word, Bucket=bucket, Key=key)
+          def get_current_word(s3, bucket, key):
+              return s3.get_object(Bucket=bucket, Key=key)['Body'].read().decode('utf-8')
+          def is_monday(dt):
+              return dt.weekday() == 0
+          def is_weekday(dt):
+              return dt.weekday() < 5
+          def handler(event, context):
+              print('Event:', event)
+              s3 = boto3.client('s3')
+              bucket = os.environ['S3_BUCKET']
+              today = datetime.now(tz=LOCAL_TZ)
+              thread_message = 'Wordle :thread: for {} {}'.format(
+                  today.strftime('%A'),
+                  today.strftime('%Y-%m-%d'))
+              if not s3_file_exists(s3, bucket, ALL_WORDS_S3_KEY):
+                  print('Uploading new all_words file to S3')
+                  update_all_words_file(s3, bucket, ALL_WORDS_S3_KEY)
+              if is_monday(today):
+                  word = random_word(s3, bucket, ALL_WORDS_S3_KEY)
+                  print(f'New start word: {word}')
+                  set_current_word(s3, bucket, LATEST_WORD_S3_KEY , word)
+                  print(f'Saved start word in s3://{bucket}/{LATEST_WORD_S3_KEY}')
+                  message = f'New start word for this week: {word}\n{thread_message}'
+                  send_to_slack(message)
+              elif is_weekday(today):
+                  print(f'Retrieving current start word from s3://{bucket}/{LATEST_WORD_S3_KEY}')
+                  word = get_current_word(s3, bucket, LATEST_WORD_S3_KEY)
+                  print(f'Using current start word: {word}')
+                  message = f'{thread_message}. Start word: {word}'
+                  send_to_slack(message)
+              else:
+                  print('Today is a weekend. Not sending any message')
