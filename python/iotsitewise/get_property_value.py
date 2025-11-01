@@ -22,6 +22,33 @@ def to_epoch(dt):
     return int(dt.timestamp())
 
 
+def batch_get_asset_property_value_history(iotsitewise_client, entries):
+    values, errors = [], []
+    params = {'entries': entries, 'maxResults': 500}
+    print('Retrieving values...', end='', flush=True)
+    while True:
+        response = iotsitewise_client.batch_get_asset_property_value_history(**params)
+        errors.extend(response['errorEntries'])
+        values.extend(value
+                      for entry in response['successEntries']
+                      for value in entry['assetPropertyValueHistory'])
+        if 'nextToken' in response:
+            params['nextToken'] = response['nextToken']
+            print('.', end='', flush=True)
+            time.sleep(0.5)
+        else:
+            print('done')
+            return values, errors
+
+
+def batch_get_asset_property_value(iotsitewise_client, entries):
+    response = iotsitewise_client.batch_get_asset_property_value(entries=entries)
+    entry = response['successEntries'][0] if response['successEntries'] else {}
+    value = entry.get('assetPropertyValue', None)
+    errors = response['errorEntries']
+    return value, errors
+
+
 def create_entry(entry_id, asset_id, property_id, alias, start_dt=None, end_dt=None, quality=None):
     entry = { 'entryId': str(entry_id) }
     if asset_id and property_id:
@@ -46,20 +73,17 @@ def extract_property_data(property_value):
     return (f'{dt} {dt_nanos}ns', value, quality)
 
 
-def print_success_entries(entries):
-    if len(entries) == 1:
-        dt, value, quality = extract_property_data(entries[0]['assetPropertyValue']) \
-                if 'assetPropertyValue' in entries[0] else '-', '-', '-'
+def print_property_values(values):
+    if isinstance(values, list):
+        headers = ['Timestamp', 'Value', 'Quality']
+        row_data = [extract_property_data(v) for v in values]
+        row_data = sorted(row_data, key=lambda x:x[0])
+        print(tabulate(row_data, headers=headers, tablefmt="presto"))
+    else:
+        dt, value, quality = extract_property_data(values) if values else ('-', '-', '-')
         print('Timestamp:', dt)
         print('Value:    ', value)
         print('Quality:  ', quality)
-    else:
-        headers = ['Timestamp', 'Value', 'quality']
-        row_data = [extract_property_data(v)
-                    for entry in entries
-                    for v in entry['assetPropertyValueHistory']]
-        row_data = sorted(row_data, key=lambda x: x[0])
-        print(tabulate(row_data, headers=headers, tablefmt="presto"))
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
@@ -67,8 +91,7 @@ def print_success_entries(entries):
 @click.option('-p', '--property-id', help='Property ID')
 @click.option('-l', '--alias', help='Asset Property (or Data Stream) Alias')
 @click.option('-m', '--minutes', type=int, help='History duration in minutes (gets latest if not specified)')
-@click.option('-d', '--dry-run', is_flag=True, help='Display request json')
-def main(asset_id, property_id, alias, minutes, dry_run):
+def main(asset_id, property_id, alias, minutes):
     iotsitewise_client = boto3.client('iotsitewise')
 
     if minutes:
@@ -76,27 +99,16 @@ def main(asset_id, property_id, alias, minutes, dry_run):
         start_dt = end_dt - timedelta(minutes=minutes)
         entries = [create_entry(idx, asset_id, property_id, alias, start_dt, end_dt, quality)
                    for idx, quality in enumerate(['GOOD', 'BAD', 'UNCERTAIN'])]
+        values, errors = batch_get_asset_property_value_history(iotsitewise_client, entries)
     else:
         end_dt = None
         start_dt = None
         entries = [create_entry(0, asset_id, property_id, alias)]
+        values, errors = batch_get_asset_property_value(iotsitewise_client, entries)
 
-    if dry_run:
-        print(json.dumps({'entries': entries}, indent=2))
-        return
-
-    if minutes:
-        response = iotsitewise_client.batch_get_asset_property_value_history(entries=entries)
-    else:
-        response = iotsitewise_client.batch_get_asset_property_value(entries=entries)
-    print("RequestId:", response['ResponseMetadata']['RequestId'])
-
-    error_messages = [entry['errorMessage'] for entry in response.get('errorEntries', [])]
-    if error_messages:
-        print('Errors:', '\n'.join(error_messages))
-        return
-
-    print_success_entries(response['successEntries'])
+    if errors:
+        print('Errors: {}\n'.format('\n'.join(error_entries)))
+    print_property_values(values)
 
 
 if __name__ == '__main__':
