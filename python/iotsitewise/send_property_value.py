@@ -100,15 +100,16 @@ def _create_property_value(value_str):
         return {'stringValue': value}
 
 
-def create_property_value(timestamp_s, value_str):
+def create_property_value(timestamp_s, value_str, quality):
     value = _create_property_value(value_str)
+    quality = 'UNCERTAIN' if 'nullValue' in value else quality.upper()
     return {
         'value': value,
         'timestamp': {
             'timeInSeconds': timestamp_s,
             'offsetInNanos': 0
         },
-        'quality': 'GOOD' if 'nullValue' not in value else 'UNCERTAIN'
+        'quality': quality
     }
 
 
@@ -123,8 +124,8 @@ def create_entry(entry_id, asset_id, property_id, alias, property_values):
     return entry
 
 
-def create_entries(asset_id, property_id, alias, value):
-    property_values = [create_property_value(epoch_now(), value)]
+def create_entries(asset_id, property_id, alias, value, quality):
+    property_values = [create_property_value(epoch_now(), value, quality)]
     return [create_entry(0, asset_id, property_id, alias, property_values)]
 
 
@@ -185,10 +186,11 @@ def custom_doc(f):
 @click.option('-p', '--property-id', help='Property ID')
 @click.option('-l', '--alias', help='Asset Property Alias')
 @click.option('-v', '--value', help='Value')
+@click.option('-q', '--quality', help='Quality (good, bad, uncertain)', default='good')
 @click.option('-d', '--dry-run', is_flag=True, help='Display request json')
 @custom_doc
-def main(asset_id, property_id, alias, value, dry_run):
-    entries = create_entries(asset_id, property_id, alias, value)
+def main(asset_id, property_id, alias, value, quality, dry_run):
+    entries = create_entries(asset_id, property_id, alias, value, quality)
 
     if dry_run:
         print(json.dumps({'entries': entries}, indent=2))
