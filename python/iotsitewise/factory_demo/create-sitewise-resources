@@ -39,27 +39,20 @@ cw_alarm_sns_topic_arn=$(echo "$cfn_output" | awk '/CWALarmMonitoringSNSTopicArn
 
 # Write config to DB file (in the format used by the Python TinyDB lib)
 # Retrieve the config with db.table('config').get(doc_id=1)
-config=$(jq -n \
-    --arg region $AWS_DEFAULT_REGION \
-    --arg prefix "$prefix" \
-    --arg meas_gen_lambda $meas_gen_function_name \
-    --arg meas_gen_invoker $meas_gen_invoker_rule \
-    --arg cw_sender_lambda $cw_sender_function_name \
-    --arg cw_alarm_sender_lambda $cw_alarm_sw_sender_function_name \
-    --arg cw_alarm_sns_topic $cw_alarm_sns_topic_arn \
-    --arg nsites $num_sites \
-    --arg ngenerators $num_generators \
-    '{
-       region: $region,
-       resource_name_prefix: $prefix,
-       meas_gen_function_name: $meas_gen_lambda,
-       meas_gen_invoker_rule: $meas_gen_invoker,
-       cw_sender_function_name: $cw_sender_lambda,
-       cw_alarm_sw_sender_function_name: $cw_alarm_sender_lambda,
-       cw_alarm_sns_topic_arn: $cw_alarm_sns_topic,
-       num_sites: ($nsites|tonumber),
-       num_generators: ($ngenerators|tonumber)
-     }')
+config=$(cat <<EOF
+{
+   "region": "$AWS_DEFAULT_REGION",
+   "resource_name_prefix": "$prefix",
+   "meas_gen_function_name": "$meas_gen_function_name",
+   "meas_gen_invoker_rule": "$meas_gen_invoker_rule",
+   "cw_sender_function_name": $cw_sender_function_name,
+   "cw_alarm_sw_sender_function_name": $cw_alarm_sw_sender_function_name,
+   "cw_alarm_sns_topic_arn": $cw_alarm_sns_topic_arn,
+   "num_sites": $num_sites,
+   "num_generators": $num_generators
+}
+EOF
+)
 
 jq -e '.' $db_file >/dev/null 2>&1
 if [[ "$?" -ne 0 ]]; then
