@@ -9,27 +9,32 @@ export AWS_SESSION_TOKEN=
 
 
 ssh_key_name=
-stack_tag='test-stack'
-availability_zone="${AWS_DEFAULT_REGION}a"
+stack_name='test-stack'
 
-ami_id=$(aws ec2 describe-images \
-            --owners amazon \
-            --filters "Name=name,Values=amzn2-ami-hvm-*x86_64-ebs" \
-            --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
-            --output text)
 
-if aws cloudformation describe-stacks --stack-name $stack_tag &>/dev/null; then
+if aws cloudformation describe-stacks --stack-name $stack_name &>/dev/null; then
     cfn_command='update-stack'
+    ami_value='UsePreviousValue=true'
+    availability_value='UsePreviousValue=true'
+    key_value='UsePreviousValue=true'
 else
+    availability_zone=$(aws ec2 describe-availability-zones \
+                            --query 'AvailabilityZones[?State==`available`].[ZoneName]' \
+                            --output text \
+                        | shuf -n 1)
+
     cfn_command='create-stack'
+    ami_value='ParameterValue=resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
+    availability_value="ParameterValue=$availability_zone"
+    key_value="ParameterValue=$ssh_key_name"
 fi
 
 set -x
 aws cloudformation $cfn_command \
-        --capabilities CAPABILITY_NAMED_IAM \
-        --stack-name "$stack_tag" \
+        --capabilities CAPABILITY_IAM \
+        --stack-name $stack_name \
         --template-body file://test_stack.yaml \
         --parameters \
-            ParameterKey=AMI,ParameterValue="$ami_id" \
-            ParameterKey=AvailabilityZone,ParameterValue="$availability_zone" \
-            ParameterKey=KeyName,ParameterValue="$ssh_key_name"
+            ParameterKey=AMI,$ami_value \
+            ParameterKey=AvailabilityZone,$availability_value \
+            ParameterKey=KeyName,$key_value

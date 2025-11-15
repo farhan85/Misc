@@ -24,3 +24,17 @@ aws ec2 describe-images \
     --filters 'Name=name,Values=al2023-ami-2023.*-x86_64' \
     --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
     --output text
+
+
+# New recommendation is to now use AWS Systems Manager parameters instead of explicitly specifying AMI IDs
+#
+# https://docs.aws.amazon.com/autoscaling/ec2/userguide/using-systems-manager-parameters.html
+# https://docs.aws.amazon.com/linux/al2023/ug/ec2.html#launch-via-aws-cli
+
+# CLI example:
+aws ec2 run-instances \
+    --image-id resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64 \
+    --instance-type t2.micro \
+    --region us-east-1 \
+    --key-name <ssh key name> \
+    --security-group-ids <security group ID>
