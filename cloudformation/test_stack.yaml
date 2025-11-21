@@ -12,6 +12,7 @@ Description: Test stack with a public and private EC2 instances
 Parameters:
   AMI:
     Type: String
+    Default: 'resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
     Description: The AMI ID to use
   InstanceType:
     Type: String
@@ -20,9 +21,6 @@ Parameters:
   KeyName:
     Type: String
     Description: The name of the EC2 key pair to use for all instances created
-  AvailabilityZone:
-    Type: String
-    Description: The availability zone in which to launch this stack (e.g. us-east-1b)
 
 Resources:
   MainVpc:
@@ -40,7 +38,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref MainVpc
-      AvailabilityZone: !Ref AvailabilityZone
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: false
       Tags:
@@ -51,7 +49,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref MainVpc
-      AvailabilityZone: !Ref AvailabilityZone
+      AvailabilityZone: !Select [1, !GetAZs '']
       CidrBlock: 10.0.0.0/24
       MapPublicIpOnLaunch: false
       Tags:

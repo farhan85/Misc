@@ -2,14 +2,13 @@
 #   --capabilities CAPABILITY_NAMED_IAM \
 #   --stack-name ... \
 #   --template-body file://test_stack_single_subnet.yaml \
-#   --parameters ParameterKey=AvailabilityZone,ParameterValue=... \
-#                ParameterKey=KeyName,ParameterValue=... \
-#                ParameterKey=AMI,ParameterValue=...
+#   --parameters ParameterKey=KeyName,ParameterValue=...
 
 Description: VPC setup running tests
 Parameters:
   AMI:
     Type: String
+    Default: 'resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
     Description: The AMI ID to use
   InstanceType:
     Type: String
@@ -18,9 +17,6 @@ Parameters:
   KeyName:
     Type: String
     Description: The name of the EC2 key pair to use for all instances created
-  AvailabilityZone:
-    Type: String
-    Description: The public zone/AZ in which to launch this stack (e.g. ap-southeast-2a)
 
 Resources:
   Vpc:
@@ -44,7 +40,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       VpcId: !Ref Vpc
-      AvailabilityZone: !Ref AvailabilityZone
+      AvailabilityZone: !Select [0, !GetAZs '']
       CidrBlock: 10.0.1.0/24
       MapPublicIpOnLaunch: false
 
