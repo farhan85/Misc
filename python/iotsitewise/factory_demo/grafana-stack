@@ -32,28 +32,17 @@ fi
 
 STACK_NAME="DemoFactoryGrafana"
 INFRA_FILE='cloudformation/grafana_infra.yaml'
-INSTANCE_TYPE='t2.micro'
 EC2_KEY_NAME='...'
 PREFIX_LIST='pl-...'
 
-
-ami_id=$(aws ec2 describe-images \
-            --owners amazon \
-            --filters "Name=name,Values=amzn2-ami-hvm-*x86_64-gp2" \
-            --query 'reverse(sort_by(Images, &CreationDate))[0].ImageId' \
-            --output text)
-
 set -x
-
 
 if [[ "$cfn_command" != "delete-stack" ]]; then
     aws cloudformation $cfn_command \
             --capabilities CAPABILITY_IAM \
             --stack-name $STACK_NAME \
             --template-body "file://$INFRA_FILE" \
-            --parameters ParameterKey=AMI,ParameterValue="$ami_id" \
-                         ParameterKey=InstanceType,ParameterValue="$INSTANCE_TYPE" \
-                         ParameterKey=KeyName,ParameterValue="$EC2_KEY_NAME" \
+            --parameters ParameterKey=KeyName,ParameterValue="$EC2_KEY_NAME" \
                          ParameterKey=PrefixList,ParameterValue="$PREFIX_LIST"
 else
     aws cloudformation $cfn_command --stack-name $STACK_NAME

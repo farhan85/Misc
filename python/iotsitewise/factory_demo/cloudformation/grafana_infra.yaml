@@ -5,7 +5,7 @@
 # using a user-provided Prefix list which you should set up separately and use to maintain a list of
 # IPs or CIDR ranges that can have access to the Grafana dashboard.
 #
-# Once the host is running, to view the Grafana dashboard go to http://<EC2 host public IP>/grafana/
+# Once the host is running, view the Grafana dashboard at http://<EC2 host public IP>/grafana/
 #
 
 Description: Grafana instance
@@ -14,9 +14,11 @@ Parameters:
   AMI:
     Type: String
     Description: AMI ID to use when launching EC2 instances
+    Default: 'resolve:ssm:/aws/service/ami-amazon-linux-latest/al2023-ami-kernel-default-x86_64'
   InstanceType:
     Type: String
     Description: EC2 instance type to use
+    Default: 't2.micro'
   KeyName:
     Type: String
     Description: Key pair to use for accessing the EC2 instances
@@ -218,7 +220,6 @@ Resources:
     Properties:
       MaxSize: 1
       MinSize: 1
-      DesiredCapacity: 1
       LaunchTemplate:
         LaunchTemplateId: !Ref PublicSubnetLaunchTemplate
         Version: !GetAtt PublicSubnetLaunchTemplate.LatestVersionNumber
