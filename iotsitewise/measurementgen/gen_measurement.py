@@ -27,6 +27,10 @@ def get_latest_values(sitewise, asset_properties):
                for i, (asset_id, property_id) in enumerate(asset_properties)]
     results = []
     for response in batch_get_asset_property_values(sitewise, entries):
+        for skipped in response['skippedEntries']:
+            print(f'WARN - Skipped entry - {skipped}')
+        for error in response['errorEntries']:
+            print(f'WARN - Error entry - {error}')
         for success in response['successEntries']:
             if 'assetPropertyValue' in success:
                 entry_id = int(success['entryId'])
