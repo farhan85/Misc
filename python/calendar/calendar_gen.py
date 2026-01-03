@@ -1,46 +1,17 @@
-#!/usr/bin/env python
-"""
-Creates a custom calendar in PDF format.
-"""
-
-import calendar
-import contextlib
-import errno
-import shutil
-import tempfile
+import configparser
 from calendar import Calendar
-from collections import defaultdict
 from datetime import date, datetime, timedelta
+from enum import Enum
 
 import click
-import configparser
-import pdfkit
-import yaml
-from enum import Enum
 from jinja2 import Environment, FileSystemLoader, select_autoescape
+from weasyprint import HTML, CSS
 
 
-CLICK_CONTEXT_SETTINGS = {'help_option_names': ['-h', '--help']}
-
-
-@contextlib.contextmanager
-def temp_directory():
-    name = tempfile.mkdtemp()
-    try:
-        yield name
-    finally:
-        try:
-            shutil.rmtree(name)
-        except OSError as e:
-            # Reraise if not ENOENT (no such file or directory).
-            # It's okay if the directory has already been deleted.
-            if e.errno != errno.ENOENT:
-                raise
-
-
-def date_range(start_date, end_date):
-    for n in range((end_date - start_date).days + 1):
-        yield start_date + timedelta(n)
+HTML_TEMPLATE = 'calendar.html.j2'
+CSS_FILE = 'calendar.css'
+DAY_NAMES = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
+MAX_CALENDAR_WEEKS = 6
 
 
 class DayType(Enum):
@@ -51,13 +22,9 @@ class DayType(Enum):
     PUBLIC_HOLIDAY = 3
 
     def __lt__(self, other):
-        if self.__class__ != other.__class__:
-            return NotImplemented
         return self.value < other.value
 
     def __gt__(self, other):
-        if self.__class__ != other.__class__:
-            return NotImplemented
         return self.value > other.value
 
     @classmethod
@@ -70,7 +37,7 @@ class DayType(Enum):
             return cls.NORMAL
 
 
-class Cell(object):
+class Cell:
     """ Represents a cell in the monthly calendar """
 
     def __init__(self, day_num=None):
@@ -98,22 +65,14 @@ class Cell(object):
         if notes:
             self._add_notes(notes)
 
-    def __str__(self):
-        return repr(self)
-
-    def __repr__(self):
-        return '{}({}, {}, {})'.format(self.__class__.__name__, self.day_num,
-            str(self.day_type), repr(self.notes))
-
 
 class CalendarInfo(object):
     def __init__(self):
-        self.days = defaultdict(dict)
+        self.days = {}
 
     def for_day(self, month, day):
-        if day not in self.days[month]:
-            self.days[month][day] = Cell(day)
-        return self.days[month][day]
+        d_month = self.days.setdefault(month, {})
+        return d_month.setdefault(day, Cell(day))
 
     def __str__(self):
         return repr(self)
@@ -122,39 +81,8 @@ class CalendarInfo(object):
         return str(self.days)
 
 
-def to_date(s, year):
-    """Converts string in 'DD MMM' format (eg 1 Feb) to a date object. """
-
-    try:
-        return datetime.strptime(s, '%d %b').replace(year=year).date()
-    except ValueError:
-        return datetime.strptime(s, '%d %B').replace(year=year).date()
-
-
-def load_calendar_info(config):
-    calendar_info = CalendarInfo()
-    year = int(config['MAIN']['year'])
-
-    for _, holiday_range in config['SCHOOL HOLIDAYS'].iteritems():
-        start_date, end_date = (d.strip() for d in holiday_range.split('-'))
-        start_date, end_date = to_date(start_date, year), to_date(end_date, year)
-        for d in date_range(start_date, end_date):
-            calendar_info.for_day(d.month, d.day).update(day_type=DayType.SCHOOL_HOLIDAY)
-
-    for dt, note in config['PUBLIC HOLIDAYS'].iteritems():
-        dt = to_date(dt, year)
-        calendar_info.for_day(dt.month, dt.day).update(DayType.PUBLIC_HOLIDAY, note)
-
-    for dt, note in config['MISC DAYS'].iteritems():
-        dt = to_date(dt, year)
-        note = [n.strip() for n in note.split(',')]
-        calendar_info.for_day(dt.month, dt.day).update(notes=note)
-
-    return calendar_info
-
-
 class MonthConfig(object):
-    """ The month being rendered into a page of a monthly calendar """
+    """ The month being rendered into the jinja page of a monthly calendar """
 
     def __init__(self, year, month, calendar_info):
         self.month = month
@@ -162,9 +90,10 @@ class MonthConfig(object):
         self.first_day = date(year, month, 1)
         self.name = self.first_day.strftime('%B')
         _days = Calendar(firstweekday=6).monthdayscalendar(year, month)
-        if len(_days) == 6:
+        if len(_days) == MAX_CALENDAR_WEEKS:
             first_row = self.merge_lists(_days[0], _days[-1])
             _days = [first_row] + _days[1:-1]
+
         self.days = _days
 
     @staticmethod
@@ -182,70 +111,68 @@ class MonthConfig(object):
             return self.calendar_info.for_day(self.month, day)
 
 
-def month_template():
-    """ Returns the template to use to create a page of the monthly calendar """
+def date_range(start_date, end_date):
+    for n in range((end_date - start_date).days + 1):
+        yield start_date + timedelta(n)
 
+
+def to_date(s, year):
+    """Converts string in 'DD MMM' format (eg 1 Feb) to a date object. """
+    return datetime.strptime(f'{s} {year}', '%d %b %Y').date()
+
+
+def load_calendar_info(config):
+    calendar_info = CalendarInfo()
+    year = int(config['MAIN']['year'])
+    for holiday_range in config['SCHOOL HOLIDAYS'].values():
+        s_start_date, s_end_date = (d.strip() for d in holiday_range.split('-'))
+        start_date, end_date = to_date(s_start_date, year), to_date(s_end_date, year)
+        for d in date_range(start_date, end_date):
+            calendar_info.for_day(d.month, d.day).update(day_type=DayType.SCHOOL_HOLIDAY)
+    for dt, note in config['PUBLIC HOLIDAYS'].items():
+        dt = to_date(dt, year)
+        calendar_info.for_day(dt.month, dt.day).update(DayType.PUBLIC_HOLIDAY, note)
+    for dt, note in config['MISC DAYS'].items():
+        dt = to_date(dt, year)
+        note = [n.strip() for n in note.split(',')]
+        calendar_info.for_day(dt.month, dt.day).update(notes=note)
+    return calendar_info
+
+
+def calendar_template():
+    """ returns the template to use to create the calendar """
     loader = FileSystemLoader('.')
     env = Environment(loader=loader, autoescape=select_autoescape(['html']))
-    return env.get_template('month.html.j2')
+    return env.get_template(HTML_TEMPLATE)
 
 
-def rotate(lst, pos=1):
-    if pos == 0 or len(lst) == 0:
+def rotate(lst, pos):
+    if pos <= 0 or pos >= len(lst):
         return lst
-
-    pos = pos % len(lst)
     return lst[pos:] + lst[:pos]
 
 
-def create_month_page(template, year, month_config):
-    """ Creates a page of the monthly calendar for the given year and month """
-
-    day_names = rotate(list(calendar.day_name), -1)
-    return template.render(year=year, month=month_config, days=day_names)
+def render_month_page(template, year, month_config):
+    return template.render(year=year, month=month_config, days=DAY_NAMES)
 
 
-def create_calendar(template, year, month_configs, output_filename):
-    """ Creates the pdf monthly calendar """
-
-    pdf_options = {
-        'orientation': 'Landscape',
-        'title' : 'Calendar {}'.format(year),
-        'page-size': 'A4',
-        'zoom': 18,
-    }
-
-    with temp_directory() as dirname:
-        files_months = []
-        for month_config in month_configs:
-            fd, tmp_path = tempfile.mkstemp(dir=dirname, suffix='.html')
-            files_months.append(tmp_path)
-            with open(tmp_path, 'w') as f:
-                f.write(create_month_page(template, year, month_config))
-
-        pdfkit.from_file(files_months, output_filename, options=pdf_options)
-
-
-@click.command(context_settings=CLICK_CONTEXT_SETTINGS)
+@click.command(context_settings={'help_option_names': ['-h', '--help']})
 @click.option('-f', '--config-file', default='./dates.ini', help='Config file')
 def main(config_file):
-    print 'Reading config from {}'.format(config_file)
+    print('Reading config from {}'.format(config_file))
     conf = configparser.ConfigParser()
     conf.read(config_file)
 
-    print 'Loading...'
+    print('Loading...')
     year = int(conf['MAIN']['year'])
+    fname = f'calendar_{year}.pdf'
     calendar_info = load_calendar_info(conf)
-
+    template = calendar_template()
     month_configs = [MonthConfig(year, m, calendar_info) for m in range(1, 13)]
-    template = month_template()
-
-    print 'Generating calendar for year {}'.format(year)
-    fname = 'calendar_{}.pdf'.format(year)
-
-    create_calendar(template, year, month_configs, fname)
-    print 'Calendar saved at {}'.format(fname)
-    pass
+    html_str =  template.render(year=year, months=month_configs, days=DAY_NAMES)
+    html = HTML(string=html_str)
+    html.write_pdf(fname, stylesheets=[CSS(filename=CSS_FILE)])
+    print(f'Calendar saved at {fname}')
 
 
 if __name__ == '__main__':

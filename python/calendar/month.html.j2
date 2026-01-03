@@ -75,13 +75,15 @@
                 {% for row in range(0, month.num_rows()) %}
                 <div class="div-table-row">
                     {%- for col in range(0,7) -%}
-                    {% set cell = month.cell(row, col) %}
-                    <div class="div-table-cell
-                            {%- if cell.day_type.value == 2 -%}
-                                {{ ' ' }}div-school-holiday
-                            {%- elif cell.day_type.value == 3 -%}
-                                {{ ' ' }}div-public-holiday
-                            {% endif %}">
+                        {% set cell = month.cell(row, col) %}
+                        {% set css_classes = 'div-table-cell' %}
+                        {% if cell.day_type.name == 'SCHOOL_HOLIDAY' %}
+                            {% set css_classes = css_classes + ' div-school-holiday' %}
+                        {% elif cell.day_type.name == 'PUBLIC_HOLIDAY' %}
+                            {% set css_classes = css_classes + ' div-public-holiday' %}
+                        {% endif %}
+
+                    <div class="{{ css_classes }}">
                         <div class="div-table-cell-day">{{ cell.day }}</div>
                         <div class="div-table-cell-content">{{ cell.notes | join('<br />') }}</div>
                     </div>
