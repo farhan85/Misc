@@ -58,20 +58,16 @@ function Get-FromApkMirror($repo, $version, $output) {
 }
 
 $patches_repo = "inotia00/revanced-patches"
-$integrations_repo = "inotia00/revanced-integrations"
 $cli_repo = "inotia00/revanced-cli"
 
 $patches_version = Get-LatestVersionGithub $patches_repo
-$integrations_version = Get-LatestVersionGithub $integrations_repo
 $cli_version = Get-LatestVersionGithub $cli_repo
 
 $patches_file = "patches-${patches_version}.rvp"
-$integrations_file = "revanced-integrations-${integrations_version}.apk"
 $patcher_cli_file = "revanced-cli-${cli_version}-all.jar"
 
 $patches_json = "https://raw.githubusercontent.com/${patches_repo}/refs/heads/revanced-extended/patches.json"
 $patches_url = "https://github.com/${patches_repo}/releases/download/v${patches_version}/${patches_file}"
-$integrations_url = "https://github.com/${integrations_repo}/releases/download/v${integrations_version}/${integrations_file}"
 $patcher_cli_url = "https://github.com/${cli_repo}/releases/download/v${cli_version}/${patcher_cli_file}"
 
 $apk_version = Get-YoutubeVersion $patches_json $package_name
@@ -80,7 +76,6 @@ $patched_apk_file = "${apk_prefix}-patched-${apk_version}.apk"
 
 Write-Host "Patches repo:         $patches_repo"
 Write-Host "Patches version:      $patches_version"
-Write-Host "Integrations version: $integrations_version"
 Write-Host "CLI version:          $cli_version"
 Write-Host "APK:                  $apk_prefix"
 Write-Host "APK version:          $apk_version"
@@ -90,11 +85,6 @@ $ProgressPreference = "SilentlyContinue"
 if (-Not (Test-Path $patches_file)) {
   Write-Host "Downloading patches file"
   Invoke-WebRequest -Uri $patches_url -OutFile $patches_file
-}
-
-if (-Not (Test-Path $integrations_file)) {
-  Write-Host "Downloading integrations file"
-  Invoke-WebRequest -Uri $integrations_url -OutFile $integrations_file
 }
 
 if (-Not (Test-Path $patcher_cli_file)) {
