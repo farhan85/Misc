@@ -32,23 +32,19 @@ function Get-YoutubeVersion($patches_json_url, $package_name) {
 }
 
 function Get-FromApkMirror($repo, $version, $output) {
-  $jsonString = @"
-    {
-      "options": {
-        "arch": "arm64-v8a"
-      },
-      "apps": [
-        {
-          "org": "google-inc",
-          "repo": "${repo}",
-          "version": "${version}",
-          "outFile": "${output}"
-        }
-      ]
+  $appsConfig = @{
+    options = @{
+      arch = "arm64-v8a"
     }
-"@
+    apps = @(@{
+      org = "google-inc"
+      repo = "$repo"
+      version = $version
+      outFile = $output
+    })
+  }
 
-  $jsonString | Set-Content -Path "apps.json" -Encoding UTF8
+  $appsConfig | ConvertTo-Json | Set-Content -Path "apps.json" -Encoding UTF8
 
   # https://github.com/tanishqmanuja/apkmirror-downloader
   .\apkmd.exe apps.json
