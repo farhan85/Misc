@@ -35,13 +35,13 @@ def create_generator_asset_model(name_prefix):
         'assetModelDescription': 'Generator with raw power/temperature measurements',
         'assetModelProperties': [
             {
-                'name': GENERATOR_POWER_MEAS_PROP_NAME ,
+                'name': GENERATOR_POWER_MEAS_PROP_NAME,
                 'dataType': 'DOUBLE',
                 'unit': 'Watts',
                 'type': { 'measurement': {} }
             },
             {
-                'name': GENERATOR_TEMP_MEAS_PROP_NAME ,
+                'name': GENERATOR_TEMP_MEAS_PROP_NAME,
                 'dataType': 'DOUBLE',
                 'unit': 'Fahrenheit',
                 'type': { 'measurement': {} }

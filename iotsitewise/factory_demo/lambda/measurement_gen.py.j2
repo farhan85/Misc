@@ -34,7 +34,7 @@ def chunks(lst, n):
 
 def handler(event, context):
     print('Event:', event)
-    sitewise_client = boto3.client(service_name='iotsitewise', region_name='{{ region }}')
+    sitewise_client = boto3.client(service_name='iotsitewise')
     ts_epoch = int(parse(event['time']).replace(second=0).timestamp())
     entries = [
         create_entry(idx, ts_epoch, asset_id, prop_id, prop_value)

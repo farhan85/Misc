@@ -45,9 +45,9 @@ config=$(cat <<EOF
    "resource_name_prefix": "$prefix",
    "meas_gen_function_name": "$meas_gen_function_name",
    "meas_gen_invoker_rule": "$meas_gen_invoker_rule",
-   "cw_sender_function_name": $cw_sender_function_name,
-   "cw_alarm_sw_sender_function_name": $cw_alarm_sw_sender_function_name,
-   "cw_alarm_sns_topic_arn": $cw_alarm_sns_topic_arn,
+   "cw_sender_function_name": "$cw_sender_function_name",
+   "cw_alarm_sw_sender_function_name": "$cw_alarm_sw_sender_function_name",
+   "cw_alarm_sns_topic_arn": "$cw_alarm_sns_topic_arn",
    "num_sites": $num_sites,
    "num_generators": $num_generators
 }
