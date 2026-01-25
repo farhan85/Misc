@@ -15,11 +15,12 @@ DIRECTORY = Path(__file__).parent.absolute()
 # Use Query objects to make ORM-style DB queries
 Model = Query()
 Asset = Query()
+AnomalyDetection = Query()
 
 
 def update_measurement_gen_lambda(lambda_client, lambda_function_name, template_env, models_db, assets_db):
     generator_model = models_db.get(Model.type == 'generator')
-    generator_assets = list(assets_db.search(Asset.type == 'generator'))
+    generator_assets = list(assets_db.search((Asset.type == 'generator') & (Asset.faulty == False)))
 
     asset_ids = [a['id'] for a in generator_assets]
     prop_ids = [generator_model['property_id'][prop_name] for prop_name in ['power', 'temperature_f']]
@@ -34,6 +35,29 @@ def update_measurement_gen_lambda(lambda_client, lambda_function_name, template_
     lambda_client.update_function_code(FunctionName=lambda_function_name,
                                        ZipFile=memory_file.getvalue())
     print('Updated Measurement Generator Lambda function')
+
+
+def update_anomaly_measurement_gen_lambda(lambda_client, lambda_function_name, template_env, models_db, assets_db, generated_data):
+    generator_model = models_db.get(Model.type == 'generator')
+    faulty_asset = assets_db.get((Asset.type == 'generator') & (Asset.faulty == True))
+
+    asset_ids = [faulty_asset['id']]
+    prop_ids = [generator_model['property_id'][prop_name] for prop_name in ['power', 'temperature_f']]
+
+    template = template_env.get_template('anomaly_meas_gen.py.j2')
+    meas_gen_code = template.render(
+        asset_properties=itertools.product(asset_ids, prop_ids),
+        mean=generated_data['mean'],
+        stdev=generated_data['stdev'],
+        anomaly_offset=generated_data['anomaly_offset'])
+
+    memory_file = BytesIO()
+    with ZipFile(memory_file, mode='w', compression=ZIP_DEFLATED) as zf:
+        zf.writestr('index.py', meas_gen_code)
+
+    lambda_client.update_function_code(FunctionName=lambda_function_name,
+                                       ZipFile=memory_file.getvalue())
+    print(f'Updated Anomaly Measurement Generator Lambda function')
 
 
 def update_cloudwatch_sender_lambda(lambda_client, lambda_function_name):
@@ -71,12 +95,15 @@ def main(db_filename):
     config = db.table('config').get(doc_id=1)
     models = db.table('models')
     assets = db.table('assets')
+    anomaly_detection = db.table('anomaly_detection')
 
     lambda_client = boto3.client('lambda', region_name=config['region'])
     template_loader = jinja2.FileSystemLoader(searchpath=DIRECTORY)
     template_env = jinja2.Environment(loader=template_loader)
+    generated_data = anomaly_detection.get(AnomalyDetection.type == 'generated_data')
 
     update_measurement_gen_lambda(lambda_client, config['meas_gen_function_name'], template_env, models, assets)
+    update_anomaly_measurement_gen_lambda(lambda_client, config['anomaly_meas_gen_function_name'], template_env, models, assets, generated_data)
     update_cloudwatch_sender_lambda(lambda_client, config['cw_sender_function_name'])
     update_cw_alarm_sitewise_sender_lambda(lambda_client, config['cw_alarm_sw_sender_function_name'], template_env, models, assets)
 

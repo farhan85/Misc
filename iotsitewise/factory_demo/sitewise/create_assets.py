@@ -36,7 +36,13 @@ def wait_for_asset_active(sitewise, asset_id, asset_name):
 def new_asset(sitewise, assets_db, model, asset_name):
     if not assets_db.contains((Asset.type == model['type']) & (Asset.name == asset_name)):
         asset_id = create_asset(sitewise, model['id'], asset_name)
-        asset = {'type': model['type'], 'id': asset_id, 'name': asset_name, 'model_id': model['id']}
+        asset = {
+            'type': model['type'],
+            'id': asset_id,
+            'name': asset_name,
+            'model_id': model['id'],
+            'faulty': False,
+        }
         if model['hierarchy_id'] is not None:
             asset['hierarchy_id'] = model['hierarchy_id']
         assets_db.insert(asset)
@@ -72,6 +78,9 @@ def main(db_filename):
         asset_name = f'{prefix}-Generator-{idx}'
         if asset_id := new_asset(sitewise, assets, generator_model, asset_name):
             asset_ids.append((asset_id, asset_name))
+
+    # The first Asset will be the faulty generator being monitored for anomaly detection
+    assets.update({'faulty': True}, Asset.name == f'{prefix}-Generator-1')
 
     for idx in range(1, num_sites + 1):
         asset_name = f'{prefix}-Site-{idx}'

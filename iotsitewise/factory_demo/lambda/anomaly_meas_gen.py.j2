@@ -1,0 +1,79 @@
+#!/usr/bin/env python3
+
+import boto3
+import json
+import os
+import random
+import time
+from botocore.exceptions import ClientError
+from dateutil.parser import parse
+
+
+ASSET_PROPERTIES = [
+{%- for val in asset_properties %}
+    ('{{ val[0] }}', '{{ val[1] }}'),
+{%- endfor %}
+]
+ANOMALY_RATE = 0.10
+ANOMALY_OFFSET = {{ anomaly_offset }}
+MEAN = {{ mean }}
+STDEV = {{ stdev }}
+
+
+def generate_new_values(asset_properties):
+    return [(asset_id, property_id, random.gauss(MEAN, STDEV))
+            for asset_id, property_id in asset_properties]
+
+
+def add_anomalies(asset_property_values):
+    values = []
+    for asset_id, property_id, value in asset_property_values:
+        if random.uniform(0, 1) < ANOMALY_RATE:
+            values.append((asset_id, property_id, value + ANOMALY_OFFSET))
+        else:
+            values.append((asset_id, property_id, value))
+    return values
+
+
+def to_entries(asset_property_values, timestamp):
+    return [
+        {
+            'entryId': str(i),
+            'assetId': asset_id,
+            'propertyId': property_id,
+            'propertyValues': [{
+                'value': { 'doubleValue': value },
+                'timestamp': { 'timeInSeconds': timestamp }
+            }]
+        }
+        for i, (asset_id, property_id, value) in enumerate(asset_property_values)
+    ]
+
+
+def chunk_list(lst, n):
+    return [lst[i:i+n] for i in range(0, len(lst), n)]
+
+
+def send_entries(sitewise, entries):
+    for batch in chunk_list(entries, 10):
+        print('Sending batch to Sitewise:')
+        for entry in batch:
+            print(entry)
+        try:
+            response = sitewise.batch_put_asset_property_value(entries=batch)
+        except ClientError as e:
+            print('ERROR: Failed to send data to SiteWise')
+            response = e.response
+        print('Response:', response)
+        time.sleep(0.5)
+
+
+def handler(event, context):
+    print('Event:', event)
+    sitewise = boto3.client(service_name='iotsitewise')
+    ts_epoch = int(parse(event['time']).replace(second=0).timestamp())
+
+    values = generate_new_values(ASSET_PROPERTIES)
+    values = add_anomalies(values)
+    entries = to_entries(values, ts_epoch)
+    send_entries(sitewise, entries)

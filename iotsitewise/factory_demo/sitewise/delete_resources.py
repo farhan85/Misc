@@ -11,6 +11,7 @@ Model = Query()
 Interface = Query()
 Asset = Query()
 Association = Query()
+AnomalyDetection = Query()
 
 
 def disassociate_assets(sitewise, parent_asset_id, parent_asset_name, hierarchy_id, child_asset_id, child_asset_name):
@@ -68,6 +69,7 @@ def main(db_filename):
     interfaces = db.table('interfaces')
     assets = db.table('assets')
     associations = db.table('associations')
+    anomaly_detection = db.table('anomaly_detection')
 
     sitewise = boto3.client('iotsitewise', region_name=config['region'])
     cw_events = boto3.client('events', region_name=config['region'])
@@ -92,6 +94,9 @@ def main(db_filename):
         asset_id = asset['id']
         wait_for_asset_deleted(sitewise, asset_id, asset['name'])
         assets.remove(Asset.id == asset_id)
+
+    anomaly_detection.remove(AnomalyDetection.type == 'bulk_import_job')
+    anomaly_detection.remove(AnomalyDetection.type == 'generated_data')
 
     factory_model = models.get(Model.type == 'factory')
     site_model = models.get(Model.type == 'site')
