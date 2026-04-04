@@ -1,0 +1,124 @@
+Description: Creates daily Wordle threads in a Slack or Telegram channel
+
+Resources:
+  DataBucket:
+    Type: AWS::S3::Bucket
+
+  DailyThreadLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub "/aws/lambda/${DailyThreadLambda}"
+      RetentionInDays: 30
+
+  DailyThreadLambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: lambda.amazonaws.com
+      ManagedPolicyArns:
+      - !Sub "arn:${AWS::Partition}:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+      Policies:
+      - PolicyName: LetCfnManageLogGroups
+        PolicyDocument:
+          Statement:
+          - Effect: Deny
+            Action: logs:CreateLogGroup
+            Resource: "*"
+      - PolicyName: DataBucketAccess
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action:
+            - s3:GetObject
+            - s3:PutObject
+            Resource: !Sub "${DataBucket.Arn}/*"
+      - PolicyName: SSMPolicy
+        PolicyDocument:
+          Version: '2012-10-17'
+          Statement:
+            - Effect: Allow
+              Action:
+                - ssm:SendCommand
+                - ssm:GetCommandInvocation
+                - ssm:ListCommandInvocations
+              Resource: "*"
+            - Effect: Allow
+              Action: ssm:GetParameters
+              Resource:
+                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/signal/*"
+                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/slack/*"
+                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/telegram/*"
+
+  DailyThreadScheduleRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+        - Effect: Allow
+          Action: sts:AssumeRole
+          Principal:
+            Service: scheduler.amazonaws.com
+      Policies:
+      - PolicyName: LambdaInvokePolicy
+        PolicyDocument:
+          Statement:
+          - Effect: Allow
+            Action: lambda:InvokeFunction
+            Resource: !GetAtt DailyThreadLambda.Arn
+
+  DailyThreadSchedule:
+    Type: AWS::Scheduler::Schedule
+    Properties:
+      FlexibleTimeWindow:
+        Mode: 'OFF'
+      ScheduleExpression: 'cron(0 1 ? * * *)'
+      ScheduleExpressionTimezone: 'America/Los_Angeles'
+      State: ENABLED
+      Target:
+        Arn: !GetAtt DailyThreadLambda.Arn
+        RoleArn: !GetAtt DailyThreadScheduleRole.Arn
+
+  DailyThreadLambda:
+    Type: AWS::Lambda::Function
+    Properties:
+      Handler: gen_word.handler
+      Runtime: python3.12
+      Role: !GetAtt DailyThreadLambdaRole.Arn
+      Timeout: 30
+      Environment:
+        Variables:
+          S3_BUCKET: !Ref DataBucket
+      Code:
+        # Code will be updated with a separate script
+        ZipFile: 'def handler(event, context): pass'
+
+  SlackWebhookParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /slack/webhook
+      Type: String
+      Value: "placeholder"
+
+  TelegramBotTokenParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /telegram/botToken
+      Type: String
+      Value: "placeholder"
+
+  TelegramChatIdParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /telegram/chatId
+      Type: String
+      Value: "placeholder"
+
+Outputs:
+  DataBucket:
+    Value: !Ref DataBucket
+  DailyThreadLambdaName:
+    Value: !Ref DailyThreadLambda
