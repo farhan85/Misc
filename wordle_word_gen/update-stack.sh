@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 
-export AWS_ACCESS_KEY_ID='...'
-export AWS_SECRET_ACCESS_KEY='...'
-export AWS_DEFAULT_REGION='...'
+[[ -z "$AWS_ACCESS_KEY_ID" ]] && { echo "Missing AWS creds"; exit 1; }
+[[ -z "$AWS_DEFAULT_REGION" ]] && { echo "Missing AWS region"; exit 1; }
 
 stack_name='WordleStartWordGen'
 #cfn_template='file://infra_signal.yaml'

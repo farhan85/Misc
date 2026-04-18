@@ -9,13 +9,16 @@ template which creates an EC2 instance that is needed to send messages to a Sign
 
 ## Setting up the workflow
 
-Update the script `update-stack.sh` to specify:
-- Your AWS credentials
-- The AWS region to set up the stack
+Update `word_gen.py` to have it send the start word to your preferred destination
 
-Then update `word_gen.py` to have it send the start word to your preferred destination
+Load your AWS creds and region in your bash shell
+```
+export AWS_ACCESS_KEY_ID=...
+export AWS_SECRET_ACCESS_KEY=...
+export AWS_DEFAULT_REGION=...
+```
 
-Run these commands to set up the stack:
+Then run these commands to set up the stack:
 
 ```
 update-stack.sh --create-stack
