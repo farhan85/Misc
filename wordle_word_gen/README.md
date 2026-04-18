@@ -9,8 +9,6 @@ template which creates an EC2 instance that is needed to send messages to a Sign
 
 ## Setting up the workflow
 
-Update `word_gen.py` to have it send the start word to your preferred destination
-
 Load your AWS creds and region in your bash shell
 ```
 export AWS_ACCESS_KEY_ID=...

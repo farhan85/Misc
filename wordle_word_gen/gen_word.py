@@ -5,6 +5,7 @@ import os
 import random
 import time
 from datetime import datetime
+from functools import partial
 from urllib.error import HTTPError
 from urllib.request import urlopen, Request
 
@@ -81,26 +82,33 @@ def is_weekday(dt):
 def handler(event, context):
     print('Event:', event)
     bucket = os.environ['S3_BUCKET']
-    ssm_document_name = os.getenv('SIGNAL_SENDER_DOCUMENT_NAME')
 
     s3 = boto3.client('s3')
     ssm = boto3.client('ssm')
 
-    response = ssm.get_parameters(
-        Names=[
-            '/signal/account',
-            '/signal/groupId',
-            '/slack/webhook',
-            '/telegram/botToken',
-            '/telegram/chatId',
-            ],
-        WithDecryption=True)
-    params = {p['Name']: p['Value'] for p in response['Parameters']}
-    signal_account = params.get('/signal/account')
-    signal_group = params.get('/signal/groupId')
-    slack_webhook = params.get('/slack/webhook')
-    telegram_bot_token = params.get('/telegram/botToken')
-    telegram_chat_id = params.get('/telegram/chatId')
+    destination = ssm.get_parameter(Name='/destination')['Parameter']['Value']
+
+    if destination == 'signal':
+        send = partial(
+            send_to_signal,
+            ssm,
+            os.environ['SIGNAL_SENDER_DOCUMENT_NAME'],
+            ssm.get_parameter(Name='/signal/account')['Parameter']['Value'],
+            ssm.get_parameter(Name='/signal/groupId')['Parameter']['Value']
+        )
+    elif destination == 'slack':
+        send = partial(
+            send_to_slack,
+            ssm.get_parameter(Name='/slack/webhook')['Parameter']['Value']
+        )
+    elif destination == 'telegram':
+        send = partial(
+            send_to_telegram,
+            ssm.get_parameter(Name='/telegram/botToken')['Parameter']['Value'],
+            ssm.get_parameter(Name='/telegram/chatId')['Parameter']['Value']
+        )
+    else:
+        raise Exception(f'Unknown destination: {destination}')
 
     today = datetime.now(tz=PST)
     day_s = today.strftime('%A')
@@ -114,14 +122,14 @@ def handler(event, context):
         set_current_word(s3, bucket, LATEST_WORD_S3_KEY , word)
         print(f'Saved start word in s3://{bucket}/{LATEST_WORD_S3_KEY}')
         message = f'New start word for this week: {word}\n{thread_message}'
-        send_to_telegram(telegram_bot_token, telegram_chat_id, message)
+        send(message)
 
     elif is_weekday(today):
         print(f'Retrieving current start word from s3://{bucket}/{LATEST_WORD_S3_KEY}')
         word = get_current_word(s3, bucket, LATEST_WORD_S3_KEY)
         print(f'Using current start word: {word}')
         message = f'{thread_message}. Start word: {word}'
-        send_to_telegram(telegram_bot_token, telegram_chat_id, message)
+        send(message)
 
     else:
         print('Today is a weekend. Not sending any message')

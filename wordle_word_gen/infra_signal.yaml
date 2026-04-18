@@ -57,11 +57,10 @@ Resources:
                 - ssm:ListCommandInvocations
               Resource: "*"
             - Effect: Allow
-              Action: ssm:GetParameters
+              Action: ssm:GetParameter
               Resource:
+                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/destination"
                 - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/signal/*"
-                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/slack/*"
-                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/telegram/*"
 
   DailyThreadScheduleRole:
     Type: AWS::IAM::Role
@@ -184,6 +183,13 @@ Resources:
       Path: "/"
       Roles:
       - !Ref InstanceRole
+
+  DestinationParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /destination
+      Type: String
+      Value: "signal"
 
   SignalAccountParam:
     Type: AWS::SSM::Parameter

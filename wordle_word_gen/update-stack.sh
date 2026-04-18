@@ -78,13 +78,16 @@ elif [[ "$operation" == "deploy-script" ]]; then
     rm function.zip
 
 elif [[ "$operation" == "save-slack-params" ]]; then
+    aws ssm put-parameter --name /destination --value 'slack' --overwrite
     aws ssm put-parameter --name /slack/webhook --value "$slack_webhook" --overwrite
 
 elif [[ "$operation" == "save-signal-params" ]]; then
+    aws ssm put-parameter --name /destination --value 'signal' --overwrite
     aws ssm put-parameter --name /signal/account --value "$signal_account" --overwrite
     aws ssm put-parameter --name /signal/groupId --value "$signal_group_id" --overwrite
 
 elif [[ "$operation" == "save-telegram-params" ]]; then
+    aws ssm put-parameter --name /destination --value 'telegram' --overwrite
     aws ssm put-parameter --name /telegram/botToken --value "$telegram_bot_token" --overwrite
     aws ssm put-parameter --name /telegram/chatId --value "$telegram_chat_id" --overwrite
 

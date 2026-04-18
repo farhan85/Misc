@@ -47,9 +47,9 @@ Resources:
                 - ssm:ListCommandInvocations
               Resource: "*"
             - Effect: Allow
-              Action: ssm:GetParameters
+              Action: ssm:GetParameter
               Resource:
-                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/signal/*"
+                - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/destination"
                 - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/slack/*"
                 - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/telegram/*"
 
@@ -95,6 +95,13 @@ Resources:
       Code:
         # Code will be updated with a separate script
         ZipFile: 'def handler(event, context): pass'
+
+  DestinationParam:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: /destination
+      Type: String
+      Value: "placeholder"
 
   SlackWebhookParam:
     Type: AWS::SSM::Parameter
