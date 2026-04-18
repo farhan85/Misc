@@ -299,3 +299,5 @@ Outputs:
     Value: !Ref DataBucket
   DailyThreadLambdaName:
     Value: !Ref DailyThreadLambda
+  DailyThreadScheduleName:
+    Value: !Ref DailyThreadSchedule
