@@ -40,12 +40,11 @@ for the DailyThreadSchedule in the infra CloudFormation template.
 If you're sending the start words to a Signal group, log into the EC2 instance to
 register your account, giving it access to post messages in your Signal group
 
-```
-# Get the EC2 instance ID
-update-stack.sh --ec2-instance
+SSH connections to the EC2 instance are only allowed through the EC2 Instance Connect
+service. You can log onto the instance through the AWS EC2 console. Once logged in,
+begin the process to link the EC2 instance to your Signal account:
 
-# Login via EC2 Instance Connect
-> aws ec2-instance-connect ssh --instance-id <instance-id>
+```
 ec2> signal-cli link -n "WordleStartWordGen"
 ```
 

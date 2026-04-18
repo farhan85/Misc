@@ -17,8 +17,6 @@ while [[ $# -gt 0 ]]; do
             operation='create-stack' ;;
         -u|--update-stack)
             operation='update-stack' ;;
-        -e|--ec2-instance)
-            operation='display-ec2-instance' ;;
         -w|--upload-word-file)
             operation='upload-word-file' ;;
         -d|--deploy-script)
@@ -55,14 +53,6 @@ elif [[ "$operation" == "update-stack" ]]; then
         --capabilities CAPABILITY_IAM \
         --template-body $cfn_template
     aws cloudformation wait stack-update-complete --stack-name $stack_name
-
-elif [[ "$operation" == "display-ec2-instance" ]]; then
-    aws ec2 describe-instances \
-        --filters 'Name=instance-state-name,Values=running' \
-        --query 'Reservations[*].Instances[*].[Tags[?Key==`Name`].Value|[0], InstanceId, PublicIpAddress]' \
-        --output table
-
-    echo "Command to connect to instance: aws ec2-instance-connect ssh --instance-id <instance id>"
 
 elif [[ "$operation" == "upload-word-file" ]]; then
     cfn_output=$(aws cloudformation describe-stacks --stack-name $stack_name --query 'Stacks[].Outputs' --output text 2>&1)

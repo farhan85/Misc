@@ -10,6 +10,16 @@ Parameters:
     Description: EC2 instance type
     Default: t2.micro
 
+Mappings:
+  # EC2 Instance Connect CIDR IP ranges
+  # curl -s https://ip-ranges.amazonaws.com/ip-ranges.json | \
+  #   jq -r '.prefixes[] | select(.service=="EC2_INSTANCE_CONNECT" and .region=="us-west-2") | .ip_prefix'
+  EC2InstanceConnect:
+    us-east-1:
+      CidrIp: 18.206.107.24/29
+    us-west-2:
+      CidrIp: 18.237.140.160/29
+
 Resources:
   DataBucket:
     Type: AWS::S3::Bucket
@@ -162,7 +172,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: !FindInMap [EC2InstanceConnect, !Ref "AWS::Region", CidrIp]
 
   InstanceRole:
     Type: AWS::IAM::Role
