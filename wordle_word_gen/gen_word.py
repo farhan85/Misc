@@ -32,6 +32,7 @@ def send_to_signal(ssm, ssm_document_name, account, group_id, message):
     ssm.send_command(
         DocumentName=ssm_document_name,
         Targets=[{'Key': 'tag:Name', 'Values': ['signal-message-sender']}],
+        MaxConcurrency="1",
         Parameters={
             'account': [account],
             'groupId': [group_id],

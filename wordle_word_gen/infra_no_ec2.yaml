@@ -41,12 +41,6 @@ Resources:
           Version: '2012-10-17'
           Statement:
             - Effect: Allow
-              Action:
-                - ssm:SendCommand
-                - ssm:GetCommandInvocation
-                - ssm:ListCommandInvocations
-              Resource: "*"
-            - Effect: Allow
               Action: ssm:GetParameter
               Resource:
                 - !Sub "arn:${AWS::Partition}:ssm:${AWS::Region}:${AWS::AccountId}:parameter/destination"
