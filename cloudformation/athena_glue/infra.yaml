@@ -1,0 +1,101 @@
+# aws cloudformation create-stack --stack-name TestAthena --template-body file://infra.yaml
+#
+# Example data file:
+#  "1001","CUST-99","2026-04-01",450.50
+#  "1002","CUST-42","2026-04-01",89.99
+#  "1003","CUST-99","2026-04-02",1200.00
+#  "1004","CUST-15","2026-04-03",15.25
+#
+# Example Athena query on raw_data_db:
+#  SELECT * FROM orders WHERE total_amount > 100.0;
+#
+
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'S3 Data Lake with Manually Defined Glue Schema'
+
+Resources:
+  # 1. S3 Bucket to store raw data
+  RawDataBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub 'raw-data-${AWS::AccountId}-${AWS::Region}'
+
+  # 2. Bucket for Athena Query Results
+  AthenaResultsBucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      BucketName: !Sub 'athena-results-${AWS::AccountId}-${AWS::Region}'
+      LifecycleConfiguration:
+        Rules:
+          - Id: DeleteOldResults
+            Status: Enabled
+            ExpirationInDays: 30
+
+  # 3. Glue Database to hold table metadata
+  GlueDatabase:
+    Type: 'AWS::Glue::Database'
+    Properties:
+      CatalogId: !Ref 'AWS::AccountId'
+      DatabaseInput:
+        Name: 'raw_data_db'
+        Description: 'Database for raw S3 files'
+
+  # 4. Glue Table with schema and partition projection
+  RawOrdersTable:
+    Type: 'AWS::Glue::Table'
+    Properties:
+      CatalogId: !Ref 'AWS::AccountId'
+      DatabaseName: !Ref GlueDatabase
+      TableInput:
+        Name: 'orders'
+        Description: 'Manually defined schema for CSV orders'
+        Parameters:
+          classification: 'csv'
+          projection.enabled: 'true'
+          projection.year.type: 'integer'
+          projection.year.range: '2026,2030'
+          projection.month.type: 'integer'
+          projection.month.range: '1,12'
+          projection.month.digits: '2'
+          storage.location.template: !Sub "s3://${RawDataBucket}/orders/year=${!year}/month=${!month}/"
+        PartitionKeys:
+          # Example partitioning: s3://my-bucket/orders/year=2026/month=04/file1.csv
+          - Name: 'year'
+            Type: 'string'
+          - Name: 'month'
+            Type: 'string'
+        StorageDescriptor:
+          Location: !Sub 's3://${RawDataBucket}/orders/'
+          InputFormat: 'org.apache.hadoop.mapred.TextInputFormat'
+          OutputFormat: 'org.apache.hadoop.hive.ql.io.HiveIgnoreKeyTextOutputFormat'
+          SerdeInfo:
+            SerializationLibrary: 'org.apache.hadoop.hive.serde2.OpenCSVSerde'
+            Parameters:
+              separatorChar: ','
+              skip.header.line.count: '1'  # Ensure headers never show up in SQL output
+          Columns:
+            - Name: 'order_id'
+              Type: 'string'
+            - Name: 'customer_id'
+              Type: 'string'
+            - Name: 'order_date'
+              Type: 'string'
+            - Name: 'total_amount'
+              Type: 'double'
+
+  # Using Parquet files:
+  # StorageDescriptor:
+  #   Location: !Sub 's3://${RawDataBucket}/orders/'
+  #   InputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetInputFormat'
+  #   OutputFormat: 'org.apache.hadoop.hive.ql.io.parquet.MapredParquetOutputFormat'
+  #   SerdeInfo:
+  #     SerializationLibrary: 'org.apache.hadoop.hive.ql.io.parquet.serde.ParquetHiveSerDe'
+
+Outputs:
+  S3BucketPath:
+    Description: 'Location of data files'
+    Value: !Sub 's3://${RawDataBucket}/orders/'
+  ResultsBucketPath:
+    Description: 'Location of Athena query results'
+    Value: !Sub 's3://${AthenaResultsBucket}/'
