@@ -31,15 +31,13 @@ aws lambda update-function-code --function-name $meas_gen_function_name --zip-fi
 echo 'Uploaded MeasurementGenerator to Lambda'
 rm $package_file
 
-echo 'Create your AssetModels and Assets, if not done already and'
-echo 'write the assetId/propertyId pairs to a CSV file and upload it to S3:'
+echo 'Create your AssetModels and Assets, if not done already and write the'
+echo 'assetId/propertyId pairs to a CSV file (with a header row) and upload to S3:'
 echo 'Note the Lambda will only generate double values for the asset properties'
-echo "> aws cp <asset property IDs file> s3://$bucket_name/$asset_property_s3_key"
-
-echo 'Then generate initial values for all asset properties:'
-echo "> python ./gen_init_values.py -f <asset property IDs file>'
+echo "> aws s3 cp <asset property IDs file> s3://$bucket_name/$asset_property_s3_key"
 
 echo 'And now start the measurement generator, by enabling the AWS Events Rule'
-echo 'which will run the Lambda function every minute'
+echo 'which will run the Lambda function every minute.'
+echo 'Initial values will be generated automatically on the first run.'
 echo "> aws events enable-rule --name $meas_gen_invoker_rule"
 

@@ -5,18 +5,9 @@ IoT SiteWise Asset Properties.
 
 This package contains the following files:
 - `create_stack.sh`: Helper script to set up the infra and deploy the Lambda function
-- `gen_init_values.py`: Generates initial values for the Asset Properties
 - `gen_measurement.py`: Lambda function to generate new random measurement values every minute
 - `infra.yaml`: Creates the infrastructure to run the Lambda function every minute
 
-
-## Requirements
-
-The only Python library needed to install is Boto3
-
-```
-python -m pip install boto3
-```
 
 ## Building the resources
 
@@ -45,11 +36,12 @@ displayed in the `create_stack.sh` output)
 ```
 
 Once you have created all your IoT SiteWise Assets, create a csv file that contains the pairs
-of Asset ID and Measurement Property IDs that is used as input to the two Python scripts
+of Asset ID and Measurement Property IDs that is used as input to the Lambda function
 
 ```
 # Store the asset and property IDs in a csv file
 > cat asset_property_ids.csv
+assetId,propertyId
 12345678-90ab-cdef-1234-abcdef111111,12345678-90ab-cdef-1234-abcdef222222
 12345678-90ab-cdef-1234-abcdef333333,12345678-90ab-cdef-1234-abcdef444444
 ...
@@ -63,15 +55,8 @@ S3 bucket can be obtained from the CloudFormation output, and the S3 key is defi
 > aws s3 cp asset_property_ids.csv s3://<S3 bucket>/asset_property_ids.csv
 ```
 
-Now you need to set initial values for all the asset properties. Run the following script to
-generate these values and send them to IoT SiteWise.
-
-```
-> python ./gen_init_values.py -f asset_property_ids.csv
-```
-
 Now you can start the measurement data generator to generate random values for all the asset
-properties every minute.
+properties every minute. Initial values will be generated automatically on the first run.
 
 ```
 > aws events enable-rule --name <Amazon EventBridge Rule>

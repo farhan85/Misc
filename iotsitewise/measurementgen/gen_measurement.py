@@ -3,90 +3,96 @@ import random
 from datetime import datetime
 
 import boto3
+import awswrangler as wr
+import numpy as np
+import pandas as pd
+from botocore.exceptions import ClientError
 
 
-def get_asset_property_ids(s3, bucket, key):
-    # Expected file format: row contents: <asset ID>,<property ID>
-    content = s3.get_object(Bucket=bucket, Key=key)['Body'].read().decode('utf-8')
-    lines = content.strip().split('\n')
-    return [line.split(',') for line in lines if line]
+VALUES_S3_KEY = 'property_values.csv'
 
 
-def batch_get_asset_property_values(sitewise, entries):
-    params = {'entries': entries}
-    while True:
-        response = sitewise.batch_get_asset_property_value(**params)
-        yield response
-        if 'nextToken' not in response:
-            break
-        params['nextToken'] = response['nextToken']
+def load_asset_properties(asset_properties_path):
+    asset_properties = wr.s3.read_csv(asset_properties_path)
+    print(f'Found {len(asset_properties)} asset/property IDs')
+    return asset_properties
 
 
-def get_latest_values(sitewise, asset_properties):
-    entries = [{'entryId': str(i), 'assetId': asset_id, 'propertyId': property_id}
-               for i, (asset_id, property_id) in enumerate(asset_properties)]
-    results = []
-    for response in batch_get_asset_property_values(sitewise, entries):
-        for skipped in response['skippedEntries']:
-            print(f'WARN - Skipped entry - {skipped}')
-        for error in response['errorEntries']:
-            print(f'WARN - Error entry - {error}')
-        for success in response['successEntries']:
-            if 'assetPropertyValue' in success:
-                entry_id = int(success['entryId'])
-                asset_id, property_id = asset_properties[entry_id]
-                value = float(success['assetPropertyValue']['value']['doubleValue'])
-                results.append((asset_id, property_id, value))
-    return results
+def load_property_values(asset_properties, property_values_path):
+    if not wr.s3.does_object_exist(property_values_path):
+        print('No property values file found')
+        return None
+
+    print('Found property values file')
+    df = wr.s3.read_csv(property_values_path)
+    ap_keys = set(zip(asset_properties['assetId'], asset_properties['propertyId']))
+    df_keys = set(zip(df['assetId'], df['propertyId']))
+    if ap_keys != df_keys:
+        print('Asset/property IDs mismatch in property values file')
+        return None
+
+    return df
 
 
-def generate_new_values(asset_property_values):
-    # Generate values using random walk
-    return [(asset_id, property_id, value + random.gauss(0, 1.0))
-            for asset_id, property_id, value in asset_property_values]
+def generate_values(asset_properties, property_values, property_values_path):
+    rng = np.random.default_rng()
+    if property_values is None:
+        print('Generating init values')
+        df = asset_properties.copy()
+        df['value'] = rng.uniform(low=1, high=100, size=len(df))
+    else:
+        print('Applying random walk')
+        df = property_values
+        df['value'] += rng.normal(0, 1, size=len(df))
+
+    wr.s3.to_csv(df, property_values_path, index=False)
+    print(f"Uploaded values file to {property_values_path}")
+    return df
 
 
 def chunk_list(lst, n):
     return [lst[i:i+n] for i in range(0, len(lst), n)]
 
 
-def send_values(sitewise, asset_property_values, dt_now):
+def send_values(sitewise, df, dt_now):
     timestamp = int(dt_now.timestamp())
     entries = [
         {
             'entryId': str(i),
-            'assetId': asset_id,
-            'propertyId': property_id,
+            'assetId': row['assetId'],
+            'propertyId': row['propertyId'],
             'propertyValues': [{
-                'value': { 'doubleValue': value },
+                'value': { 'doubleValue': row['value'] },
                 'timestamp': { 'timeInSeconds': timestamp }
             }]
         }
-        for i, (asset_id, property_id, value) in enumerate(asset_property_values)
+        for i, row in df.iterrows()
     ]
 
     for batch in chunk_list(entries, 10):
-        print('Sending batch to Sitewise:')
-        for entry in batch:
-            print(entry)
+        print(f'Sending batch with {len(batch)} entries to Sitewise')
         response = sitewise.batch_put_asset_property_value(entries=batch)
         print('Response:', response)
 
+        error_messages = '\n'.join([
+            '{} {}'.format(error['errorCode'], error['errorMessage'])
+            for entry in response.get('errorEntries', [])
+            for error in entry.get('errors', [])
+        ])
+        if error_messages:
+            raise RuntimeError(f'Failed sending data to SiteWise: {error_messages}')
+
 
 def handler(event, context):
+    dt_now = datetime.fromisoformat(event['time']).replace(second=0, microsecond=0)
     s3_bucket = os.environ['DATA_S3_BUCKET']
     s3_key = os.environ['ASSET_PROPERTY_ID_S3_KEY']
-    dt_now = datetime.fromisoformat(event['time']).replace(second=0, microsecond=0)
+    asset_properties_path = f's3://{s3_bucket}/{s3_key}'
+    property_values_path = f's3://{s3_bucket}/{VALUES_S3_KEY}'
 
-    s3 = boto3.client('s3')
     sitewise = boto3.client('iotsitewise')
 
-    asset_properties = get_asset_property_ids(s3, s3_bucket, s3_key)
-    print(f'Found {len(asset_properties)} asset/property IDs')
-
-    if asset_properties:
-        values = get_latest_values(sitewise, asset_properties)
-        print(f'Received {len(values)} latest values')
-
-        values = generate_new_values(values)
-        send_values(sitewise, values, dt_now)
+    asset_properties = load_asset_properties(asset_properties_path)
+    property_values = load_property_values(asset_properties, property_values_path)
+    df = generate_values(asset_properties, property_values, property_values_path)
+    send_values(sitewise, df, dt_now)
