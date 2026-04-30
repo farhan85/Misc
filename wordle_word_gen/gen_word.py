@@ -125,12 +125,9 @@ def handler(event, context):
         message = f'New start word for this week: {word}\n{thread_message}'
         send(message)
 
-    elif is_weekday(today):
+    else:
         print(f'Retrieving current start word from s3://{bucket}/{LATEST_WORD_S3_KEY}')
         word = get_current_word(s3, bucket, LATEST_WORD_S3_KEY)
         print(f'Using current start word: {word}')
         message = f'{thread_message}. Start word: {word}'
         send(message)
-
-    else:
-        print('Today is a weekend. Not sending any message')
