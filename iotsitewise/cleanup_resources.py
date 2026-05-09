@@ -33,7 +33,7 @@ def wait_for_portal_deleted(sw_client, portal_id):
         lambda: sw_client.describe_portal(portalId=portal_id)['portalStatus'])
 
 
-def paginate_list(list_func, output_key, return_val_func, params):
+def paginate_list(list_func, output_key, return_val_func, params=None):
     params = params or {}
     while True:
         response = list_func(**params)
@@ -117,16 +117,16 @@ def topological_sort(asset_models):
     # Implemented using Kahn's algorithm
     asset_model_id_map = dict((am['assetModelId'], am) for am in asset_models)
 
-    adjancy_graph = {}
+    adjacency_graph = {}
     for am in asset_models:
         am_id = am['assetModelId']
-        adjancy_graph.setdefault(am_id, set())
+        adjacency_graph.setdefault(am_id, set())
         # Parent models must be deleted before child models
         for child_id in (h['childAssetModelId'] for h in am['assetModelHierarchies']):
-            adjancy_graph.setdefault(child_id, set()).add(am_id)
+            adjacency_graph.setdefault(child_id, set()).add(am_id)
         # Asset models must be deleted before interfaces
         for int_id in (i['id'] for i in am.get('interfaceDetails', [])):
-            adjancy_graph.setdefault(int_id, set()).add(am_id)
+            adjacency_graph.setdefault(int_id, set()).add(am_id)
 
     while adjancy_graph:
         next_batch = set(am_id for am_id, child_ids in adjancy_graph.items() if len(child_ids) == 0)
@@ -184,15 +184,21 @@ def delete_portal(sw_client, portal_id):
     print('done')
 
 
-def delete_sitewise_resources(sw_client):
+def delete_portals(sw_client):
     for portal_id in list(portal_ids(sw_client)):
         delete_portal(sw_client, portal_id)
+
+
+def delete_models_and_assets(sw_client):
     asset_models = list(all_asset_models(sw_client))
     delete_order = reversed(topological_sort(asset_models))
     for asset_model_batch in delete_order:
         for asset_model in asset_model_batch:
             delete_asset_model_assets(sw_client, asset_model)
             delete_asset_model(sw_client, asset_model['assetModelId'])
+
+
+def delete_timeseries(sw_client):
     for time_series_alias in time_series_aliases(sw_client):
         sw_client.delete_time_series(time_series_alias)
         print(f"Deleted TimeSeries '{time_series_alias}'")
@@ -200,4 +206,7 @@ def delete_sitewise_resources(sw_client):
 
 if __name__ == '__main__':
     sw_client = boto3.client('iotsitewise')
-    delete_sitewise_resources(sw_client)
+
+    delete_portals(sw_client)
+    delete_models_and_assets(sw_client)
+    delete_timeseries(sw_client)
