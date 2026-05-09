@@ -33,6 +33,11 @@ def wait_for_portal_deleted(sw_client, portal_id):
         lambda: sw_client.describe_portal(portalId=portal_id)['portalStatus'])
 
 
+def wait_for_computation_model_deleted(sw_client, comp_model_id)
+    wait_for_resource_deleted(f'ComputationalModel {comp_model_id}',
+        lambda: sw_client.describe_computation_model(computationModelId=comp_model_id)['computationModelStatus'])
+
+
 def paginate_list(list_func, output_key, return_val_func, params=None):
     params = params or {}
     while True:
@@ -104,6 +109,13 @@ def access_policy_ids(sw_client, resource_id, resource_type):
         'accessPolicySummaries',
         lambda policy: policy['id'],
         {'resourceId': resource_id, 'resourceType': resource_type})
+
+
+def computation_model_ids(sw_client):
+    return paginate_list(
+        sw_client.list_computation_models,
+        'computationModelSummaries',
+        lambda comp_model: comp_model['id'])
 
 
 def time_series_aliases(sw_client):
@@ -193,6 +205,14 @@ def delete_portals(sw_client):
         delete_portal(sw_client, portal_id)
 
 
+def delete_computation_models(sw_client):
+    for comp_model_id in computation_model_ids(sw_client):
+        print(f'Deleting ComputationModel {comp_model_id}...', end='', flush=True)
+        sw_client.delete_computation_model(computationModelId=comp_model_id)
+        wait_for_computation_model_deleted(sw_client, comp_model_id)
+        print('done')
+
+
 def delete_models_and_assets(sw_client):
     asset_models = list(all_asset_models(sw_client))
     for asset_model_batch in topological_sort(asset_models):
@@ -211,5 +231,6 @@ if __name__ == '__main__':
     sw_client = boto3.client('iotsitewise')
 
     delete_portals(sw_client)
+    delete_computation_models(sw_client)
     delete_models_and_assets(sw_client)
     delete_timeseries(sw_client)
