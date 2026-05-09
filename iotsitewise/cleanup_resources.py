@@ -114,7 +114,6 @@ def time_series_aliases(sw_client):
 
 
 def topological_sort(asset_models):
-    # Implemented using Kahn's algorithm
     asset_model_id_map = dict((am['assetModelId'], am) for am in asset_models)
 
     adjacency_graph = {}
@@ -128,14 +127,19 @@ def topological_sort(asset_models):
         for int_id in (i['id'] for i in am.get('interfaceDetails', [])):
             adjacency_graph.setdefault(int_id, set()).add(am_id)
 
-    while adjancy_graph:
-        next_batch = set(am_id for am_id, child_ids in adjancy_graph.items() if len(child_ids) == 0)
-        yield next_batch
-        for am_id in next_batch:
-            del adjancy_graph[am_id]
-        for child_ids in adjancy_graph.values():
-            # Remove the next_batch nodes from the in-node list
-            child_ids.difference_update(next_batch)
+    # Apply Kahn's algorithm to construct the topological sort
+    parent_count = {am_id: len(parent_ids) for am_id, parent_ids in adjacency_graph.items()}
+    curr_batch = set(am_id for am_id, num_parents in parent_count.items() if num_parents == 0)
+    while curr_batch:
+        yield [asset_model_id_map[am_id] for am_id in curr_batch]
+        next_batch = set()
+        for am_id in curr_batch:
+            for candidate, parent_ids in adjacency_graph.items():
+                if am_id in parent_ids:
+                    parent_count[candidate] -= 1
+                    if parent_count[candidate] == 0:
+                        next_batch.add(candidate)
+        curr_batch = next_batch
 
 
 def delete_asset_model_assets(sw_client, asset_model):
@@ -191,8 +195,7 @@ def delete_portals(sw_client):
 
 def delete_models_and_assets(sw_client):
     asset_models = list(all_asset_models(sw_client))
-    delete_order = reversed(topological_sort(asset_models))
-    for asset_model_batch in delete_order:
+    for asset_model_batch in topological_sort(asset_models):
         for asset_model in asset_model_batch:
             delete_asset_model_assets(sw_client, asset_model)
             delete_asset_model(sw_client, asset_model['assetModelId'])
