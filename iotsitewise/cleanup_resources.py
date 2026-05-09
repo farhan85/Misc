@@ -80,6 +80,13 @@ def list_associated_assets(sw_client, asset_id, hierarchy_ids):
             yield association
 
 
+def gateway_ids(sw_client):
+    return paginate_list(
+        sw_client.list_gateways,
+        'gatewaySummaries',
+        lambda gateway: gateway['gatewayId'])
+
+
 def portal_ids(sw_client):
     return paginate_list(
         sw_client.list_portals,
@@ -200,6 +207,12 @@ def delete_portal(sw_client, portal_id):
     print('done')
 
 
+def delete_gateways(sw_client):
+    for gateway_id in gateway_ids(sw_client):
+        sw_client.delete_gateway(gatewayId=gateway_id)
+        print(f'Deleted gateway: {gateway_id}')
+
+
 def delete_portals(sw_client):
     for portal_id in list(portal_ids(sw_client)):
         delete_portal(sw_client, portal_id)
@@ -230,6 +243,7 @@ def delete_timeseries(sw_client):
 if __name__ == '__main__':
     sw_client = boto3.client('iotsitewise')
 
+    delete_gateways(sw_client)
     delete_portals(sw_client)
     delete_computation_models(sw_client)
     delete_models_and_assets(sw_client)
