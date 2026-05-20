@@ -34,8 +34,16 @@ if [[ "$operation" == "encrypt" ]]; then
     ./encrypt.sh $ARCHIVE_FILE $RSA_PUBLIC_KEY $S3_LOCATION
     rm $ARCHIVE_FILE
 
+    # Better alternative: use GnuPG to create an encrypted .gpg file.
+    # It already handles the logic of envelope encryption with RSA/AES keys
+    # gpg --encrypt --recipient your-email@example.com "$ARCHIVE_FILE"
+
 elif [[ "$operation" == "decrypt" ]]; then
     [[ -z "$s3_file_uri" ]] && { echo "Missing S3 URI"; exit 1; }
 
     ./decrypt.sh "$s3_file_uri" $RSA_PRIVATE_KEY
+
+    # Better alternative: use GnuPG to manage encrypted .gpg files
+    # aws s3 cp s3://... $ARCHIVE_FILE_ENC
+    # gpg --decrypt --recipient your-email@example.com "$ARCHIVE_FILE_ENC"
 fi

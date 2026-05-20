@@ -34,4 +34,4 @@ tar --exclude='.git' \
     --gzip \
     -cf $ARCHIVE_FILE $BACKUP_FILES
 
-gzip --list "${ARCHIVE_FILE}"
+gzip --list "$ARCHIVE_FILE"
