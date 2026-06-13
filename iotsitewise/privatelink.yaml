@@ -1,0 +1,157 @@
+# aws cloudformation create-stack --stack-name IoTSiteWisePrivateLinkTest --template-body 'file://privatelink.yaml' --capabilities CAPABILITY_IAM
+# aws lambda invoke --function-name IoTSiteWisePrivateLinkTest /dev/stdout
+# aws cloudformation delete-stack --stack-name IoTSiteWisePrivateLinkTest
+
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Accessing IoT SiteWise via PrivateLink
+
+Parameters:
+  VpcCidr:
+    Type: String
+    Default: 10.0.0.0/16
+  SubnetCidr:
+    Type: String
+    Default: 10.0.1.0/24
+
+Resources:
+  VPC:
+    Type: AWS::EC2::VPC
+    Properties:
+      CidrBlock: !Ref VpcCidr
+      EnableDnsSupport: true
+      EnableDnsHostnames: true
+
+  Subnet:
+    Type: AWS::EC2::Subnet
+    Properties:
+      VpcId: !Ref VPC
+      CidrBlock: !Ref SubnetCidr
+      AvailabilityZone: !Select [0, !GetAZs '']
+
+  RouteTable:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref VPC
+
+  SubnetRouteTableAssociation:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      SubnetId: !Ref Subnet
+      RouteTableId: !Ref RouteTable
+
+  SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow HTTPS for PrivateLink
+      VpcId: !Ref VPC
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: !Ref VpcCidr
+
+  IoTSiteWiseApiVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.iotsitewise.api
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref Subnet
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      PrivateDnsEnabled: true
+
+  IoTSiteWiseDataVpcEndpoint:
+    Type: AWS::EC2::VPCEndpoint
+    Properties:
+      VpcId: !Ref VPC
+      ServiceName: !Sub com.amazonaws.${AWS::Region}.iotsitewise.data
+      VpcEndpointType: Interface
+      SubnetIds:
+        - !Ref Subnet
+      SecurityGroupIds:
+        - !Ref SecurityGroup
+      PrivateDnsEnabled: true
+
+  LambdaRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: lambda.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaVPCAccessExecutionRole
+      Policies:
+        - PolicyName: IoTSiteWiseAccess
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action: iotsitewise:*
+                Resource: '*'
+
+  TestFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      FunctionName: IoTSiteWisePrivateLinkTest
+      Runtime: python3.12
+      Handler: index.handler
+      Role: !GetAtt LambdaRole.Arn
+      Timeout: 30
+      VpcConfig:
+        SubnetIds:
+          - !Ref Subnet
+        SecurityGroupIds:
+          - !Ref SecurityGroup
+      Code:
+        ZipFile: |
+          import boto3
+          import json
+          import random
+          import time
+
+          def handler(event, context):
+              client = boto3.client('iotsitewise')
+              response = client.create_asset_model(
+                assetModelName='PLTest',
+                assetModelProperties=[{
+                  'name':'power',
+                  'dataType':'DOUBLE',
+                  'unit':'W',
+                  'type':{ 'measurement': {} }
+              }])
+              model_id = response['assetModelId']
+              client.get_waiter('asset_model_active').wait(assetModelId=model_id)
+
+              response = client.describe_asset_model(assetModelId=model_id)
+              prop_id = next(p['id'] for p in response['assetModelProperties'] if p['name'] == 'power')
+
+              response = client.create_asset(assetModelId=model_id, assetName='PLTest-1')
+              asset_id = response['assetId']
+              client.get_waiter('asset_active').wait(assetId=asset_id)
+
+              entry = {
+                'entryId': '0',
+                'assetId': asset_id,
+                'propertyId': prop_id,
+                'propertyValues': [{
+                  'value': { 'doubleValue': random.random()*100 },
+                  'timestamp': { 'timeInSeconds': int(time.time()) }
+                }]
+              }
+              response = client.batch_put_asset_property_value(entries=[entry])
+              batch_put_request_id = response['ResponseMetadata']['RequestId']
+
+              client.delete_asset(assetId=asset_id)
+              client.get_waiter('asset_not_exists').wait(assetId=asset_id)
+              client.delete_asset_model(assetModelId=model_id)
+
+              return {
+                'statusCode': 200,
+                'body': f'Test successful, model={model_id}, asset={asset_id}, property={prop_id}, batch_put_request_id={batch_put_request_id}'
+              }
