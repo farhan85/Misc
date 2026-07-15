@@ -4,6 +4,21 @@ param(
   [switch][Alias("m")]$YoutubeMusic
 )
 
+$tokenPath = "$PSScriptRoot\github_token.txt"
+if (-not (Test-Path -Path $tokenPath)) {
+    Write-Error "Error: Missing GitHub token file"
+    Exit 1
+}
+
+# Generate new token: https://github.com/settings/personal-access-tokens/new
+$githubToken = (Get-Content -Path $tokenPath -Raw).Trim()
+
+$githubHeaders = @{
+  "Authorization"        = "Bearer $githubToken"
+  "Accept"               = "application/vnd.github.v3+json"
+  "X-GitHub-Api-Version" = "2022-11-28"
+}
+
 if (-Not $Youtube -and -Not $YoutubeMusic) {
   Write-Error -Message "Missing params. Must provide either -Youtube/-y or -YoutubeMusic/-m"
   Exit 1
@@ -18,17 +33,19 @@ if ($Youtube) {
 }
 
 function Get-LatestVersionGithub($repo) {
-  Invoke-WebRequest -Uri "https://api.github.com/repos/${repo}/releases/latest"
-    | ConvertFrom-Json
+  Invoke-RestMethod -Uri "https://api.github.com/repos/${repo}/releases/latest" -Headers $githubHeaders -Method Get
     | Select-Object -First 1
     | Select-Object -ExpandProperty tag_name
     | ForEach-Object { $_.TrimStart("v") }
 }
 
 function Get-YoutubeVersion($patches_json_url, $package_name) {
-  $json = Invoke-WebRequest -Uri $patches_json_url | ConvertFrom-Json
-  $all_versions = $json.patches.compatiblePackages.$package_name | ForEach-Object { $_ }
-  return ( $all_versions | Sort-Object { [version]$_ } | Select-Object -Last 1 )
+  return (Invoke-RestMethod -Uri $patches_json_url -Headers $githubHeaders -Method Get).patches.compatiblePackages |
+    Where-Object { $_.packageName -eq $package_name } |
+    Select-Object -ExpandProperty targets |
+    ForEach-Object { [version]$_.version } |
+    Sort-Object -Descending |
+    Select-Object -First 1
 }
 
 function Get-FromApkMirror($repo, $version, $output) {
@@ -55,13 +72,13 @@ function Get-FromApkMirror($repo, $version, $output) {
 }
 
 $patches_repo = "MorpheApp/morphe-patches"
-$cli_repo = "MorpheApp/morphe-cli"
+$cli_repo = "MorpheApp/morphe-desktop"
 
 $patches_version = Get-LatestVersionGithub $patches_repo
 $cli_version = Get-LatestVersionGithub $cli_repo
 
 $patches_file = "patches-${patches_version}.mpp"
-$patcher_cli_file = "morphe-cli-${cli_version}-all.jar"
+$patcher_cli_file = "morphe-desktop-${cli_version}-all.jar"
 
 $patches_json = "https://raw.githubusercontent.com/${patches_repo}/refs/heads/main/patches-list.json"
 $patches_url = "https://github.com/${patches_repo}/releases/download/v${patches_version}/${patches_file}"
@@ -81,12 +98,12 @@ Write-Host "APK version:          $apk_version"
 $ProgressPreference = "SilentlyContinue"
 if (-Not (Test-Path $patches_file)) {
   Write-Host "Downloading patches file"
-  Invoke-WebRequest -Uri $patches_url -OutFile $patches_file
+  Invoke-WebRequest -Uri $patches_url -Headers $githubHeaders -Method Get -OutFile $patches_file
 }
 
 if (-Not (Test-Path $patcher_cli_file)) {
   Write-Host "Downloading CLI file"
-  Invoke-WebRequest -Uri $patcher_cli_url -OutFile $patcher_cli_file
+  Invoke-WebRequest -Uri $patcher_cli_url -Headers $githubHeaders -Method Get -OutFile $patcher_cli_file
 }
 
 if (-Not (Test-Path $orig_apk_file)) {
@@ -97,9 +114,8 @@ $ProgressPreference = "Continue"
 
 Write-Host "Patching $orig_apk_file"
 java -jar $patcher_cli_file patch `
-    --purge `
-    --patches $patches_file `
-    --out $patched_apk_file `
+    -p $patches_file `
+    -o $patched_apk_file `
     $orig_apk_file
 
 # adb devices
