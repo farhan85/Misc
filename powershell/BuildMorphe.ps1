@@ -4,6 +4,21 @@ param(
   [switch][Alias("m")]$YoutubeMusic
 )
 
+if ($Youtube) {
+  $package_name = "com.google.android.youtube"
+  $apk_prefix = "youtube"
+  $apk_arch = "universal"
+} elseif ($YoutubeMusic) {
+  $package_name = "com.google.android.apps.youtube.music"
+  $apk_prefix = "youtube-music"
+  $apk_arch = "arm64-v8a"
+} else {
+  Write-Error -Message "Missing params. Must provide either:"
+  Write-Error -Message "  -Youtube/-y"
+  Write-Error -Message "  -YoutubeMusic/-m"
+  Exit 1
+}
+
 $tokenPath = "$PSScriptRoot\github_token.txt"
 if (-not (Test-Path -Path $tokenPath)) {
     Write-Error "Error: Missing GitHub token file"
@@ -17,21 +32,6 @@ $githubHeaders = @{
   "Authorization"        = "Bearer $githubToken"
   "Accept"               = "application/vnd.github.v3+json"
   "X-GitHub-Api-Version" = "2022-11-28"
-}
-
-if (-Not $Youtube -and -Not $YoutubeMusic) {
-  Write-Error -Message "Missing params. Must provide either -Youtube/-y or -YoutubeMusic/-m"
-  Exit 1
-}
-
-if ($Youtube) {
-  $package_name = "com.google.android.youtube"
-  $apk_prefix = "youtube"
-  $apk_arch = "universal"
-} elseif ($YoutubeMusic) {
-  $package_name = "com.google.android.apps.youtube.music"
-  $apk_prefix = "youtube-music"
-  $apk_arch = "arm64-v8a"
 }
 
 function Get-LatestVersionGithub($repo) {
@@ -53,11 +53,11 @@ function Get-YoutubeVersion($patches_json_url, $package_name) {
 
 function Get-FromApkMirror($repo, $version, $output) {
   $appsConfig = @{
-    options = @{ arch = $apk_arch }
     apps = @(@{
       org = "google-inc"
       repo = $repo
       version = $version
+      arch = $apk_arch
       outFile = $output
     })
   }
