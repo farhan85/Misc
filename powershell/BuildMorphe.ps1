@@ -27,9 +27,11 @@ if (-Not $Youtube -and -Not $YoutubeMusic) {
 if ($Youtube) {
   $package_name = "com.google.android.youtube"
   $apk_prefix = "youtube"
+  $apk_arch = "universal"
 } elseif ($YoutubeMusic) {
   $package_name = "com.google.android.apps.youtube.music"
   $apk_prefix = "youtube-music"
+  $apk_arch = "arm64-v8a"
 }
 
 function Get-LatestVersionGithub($repo) {
@@ -42,30 +44,25 @@ function Get-LatestVersionGithub($repo) {
 function Get-YoutubeVersion($patches_json_url, $package_name) {
   return (Invoke-RestMethod -Uri $patches_json_url -Headers $githubHeaders -Method Get).patches.compatiblePackages |
     Where-Object { $_.packageName -eq $package_name } |
-    Select-Object -ExpandProperty targets |
-    ForEach-Object { [version]$_.version } |
-    Sort-Object -Descending |
-    Select-Object -First 1
+    ForEach-Object { $_.targets } |
+    Where-Object { $_.isExperimental -eq $false } |
+    Sort-Object { [version]$_.version } -Descending |
+    Select-Object -First 1 |
+    Select-Object -ExpandProperty version
 }
 
 function Get-FromApkMirror($repo, $version, $output) {
-  $jsonString = @"
-    {
-      "options": {
-        "arch": "arm64-v8a"
-      },
-      "apps": [
-        {
-          "org": "google-inc",
-          "repo": "${repo}",
-          "version": "${version}",
-          "outFile": "${output}"
-        }
-      ]
-    }
-"@
+  $appsConfig = @{
+    options = @{ arch = $apk_arch }
+    apps = @(@{
+      org = "google-inc"
+      repo = $repo
+      version = $version
+      outFile = $output
+    })
+  }
 
-  $jsonString | Set-Content -Path "apps.json" -Encoding UTF8
+  $appsConfig | ConvertTo-Json | Set-Content -Path "apps.json" -Encoding UTF8
 
   # https://github.com/tanishqmanuja/apkmirror-downloader
   .\apkmd.exe apps.json
