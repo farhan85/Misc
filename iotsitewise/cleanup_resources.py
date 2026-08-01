@@ -33,9 +33,22 @@ def wait_for_portal_deleted(sw_client, portal_id):
         lambda: sw_client.describe_portal(portalId=portal_id)['portalStatus'])
 
 
-def wait_for_computation_model_deleted(sw_client, comp_model_id)
+def wait_for_computation_model_deleted(sw_client, comp_model_id):
     wait_for_resource_deleted(f'ComputationalModel {comp_model_id}',
         lambda: sw_client.describe_computation_model(computationModelId=comp_model_id)['computationModelStatus'])
+
+
+def wait_for_workspace_deleted(sw_client, workspace_name):
+    wait_for_resource_deleted(f'Workspace {workspace_name}',
+        lambda: sw_client.describe_workspace(workspaceName=workspace_name)['workspaceStatus'])
+
+
+def wait_for_dataset_deleted(sw_client, dataset_id, workspace_name=None):
+    params = {'datasetId': dataset_id}
+    if workspace_name is not None:
+        params['workspaceName'] = workspace_name
+    wait_for_resource_deleted(f'Dataset {dataset_id}',
+        lambda: sw_client.describe_dataset(**params)['datasetStatus'])
 
 
 def paginate_list(list_func, output_key, return_val_func, params=None):
@@ -123,6 +136,24 @@ def computation_model_ids(sw_client):
         sw_client.list_computation_models,
         'computationModelSummaries',
         lambda comp_model: comp_model['id'])
+
+
+def workspace_names(sw_client):
+    return paginate_list(
+        sw_client.list_workspaces,
+        'workspaceSummaries',
+        lambda workspace: workspace['name'])
+
+
+def dataset_ids(sw_client, source_type, workspace_name=None):
+    params = { 'sourceType': source_type }
+    if workspace_name is not None:
+        params['workspaceName'] = workspace_name
+    return paginate_list(
+        sw_client.list_datasets,
+        'datasetSummaries',
+        lambda dataset: dataset['id'],
+        params)
 
 
 def time_series_aliases(sw_client):
@@ -226,6 +257,28 @@ def delete_computation_models(sw_client):
         print('done')
 
 
+def delete_workspaces(sw_client):
+    for workspace_name in workspace_names(sw_client):
+        for dataset_id in dataset_ids(sw_client, 'SITEWISE', workspace_name):
+            print(f'Deleting Dataset {dataset_id}...', end='', flush=True)
+            sw_client.delete_dataset(datasetId=dataset_id, workspaceName=workspace_name)
+            wait_for_dataset_deleted(sw_client, dataset_id, workspace_name)
+            print('done')
+
+        print(f'Deleting Workspace {workspace_name}...', end='', flush=True)
+        sw_client.delete_workspace(workspaceName=workspace_name)
+        wait_for_workspace_deleted(sw_client, workspace_name)
+        print('done')
+
+
+def delete_kendra_datasets(sw_client):
+    for dataset_id in dataset_ids(sw_client, 'KENDRA'):
+        print(f'Deleting Dataset {dataset_id}...', end='', flush=True)
+        sw_client.delete_dataset(datasetId=dataset_id)
+        wait_for_dataset_deleted(sw_client, dataset_id)
+        print('done')
+
+
 def delete_models_and_assets(sw_client):
     asset_models = list(all_asset_models(sw_client))
     for asset_model_batch in topological_sort(asset_models):
@@ -246,5 +299,7 @@ if __name__ == '__main__':
     delete_gateways(sw_client)
     delete_portals(sw_client)
     delete_computation_models(sw_client)
+    delete_workspaces(sw_client)
+    delete_kendra_datasets(sw_client)
     delete_models_and_assets(sw_client)
     delete_timeseries(sw_client)
