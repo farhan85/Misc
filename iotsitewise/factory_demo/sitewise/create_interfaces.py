@@ -21,15 +21,8 @@ FACTORY_HIERARCHY_NAME = 'hierarchy_1'
 
 def wait_for_asset_model_active(sitewise, asset_model_id, asset_model_name):
     print(f'Waiting for AssetModel {asset_model_name} to become Active...', end = '', flush=True)
-    for _ in range(0, 60):
-        state = sitewise.describe_asset_model(assetModelId=asset_model_id)['assetModelStatus']['state']
-        if state == 'ACTIVE':
-            print('done')
-            return
-        print('.', end = '', flush=True)
-        time.sleep(1)
-    print('failed')
-    raise Exception(f'AssetModel {asset_model_name} ({asset_model_id}) final state: {state}')
+    sitewise.get_waiter('asset_model_active').wait(assetModelId=asset_model_id)
+    print('done')
 
 
 def create_generator_interface(name_prefix):

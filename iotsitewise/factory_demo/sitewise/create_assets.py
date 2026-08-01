@@ -22,15 +22,8 @@ def create_asset(sitewise, asset_model_id, asset_name):
 
 def wait_for_asset_active(sitewise, asset_id, asset_name):
     print(f'Waiting for Asset {asset_name} to become Active...', end = '', flush=True)
-    for _ in range(0, 60):
-        status = sitewise.describe_asset(assetId=asset_id)['assetStatus']
-        if status['state'] == 'ACTIVE':
-            print('done')
-            return
-        print('.', end = '', flush=True)
-        time.sleep(1)
-    print('failed')
-    raise Exception(f'Asset {asset_name} ({asset_id}) final status: {status}')
+    sitewise.get_waiter('asset_active').wait(assetId=asset_id)
+    print('done')
 
 
 def new_asset(sitewise, assets_db, model, asset_name):

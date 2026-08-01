@@ -18,21 +18,6 @@ def wait_for_resource_deleted(resource_str, get_resource_status):
     raise Exception(f'Failed to delete {resource_str}. Final status: {status}')
 
 
-def wait_for_asset_model_deleted(sw_client, asset_model_id):
-    wait_for_resource_deleted(f'AssetModel {asset_model_id}',
-        lambda: sw_client.describe_asset_model(assetModelId=asset_model_id)['assetModelStatus'])
-
-
-def wait_for_asset_deleted(sw_client, asset_id):
-    wait_for_resource_deleted(f'Asset {asset_id}',
-        lambda: sw_client.describe_asset(assetId=asset_id)['assetStatus'])
-
-
-def wait_for_portal_deleted(sw_client, portal_id):
-    wait_for_resource_deleted(f'Portal {portal_id}',
-        lambda: sw_client.describe_portal(portalId=portal_id)['portalStatus'])
-
-
 def wait_for_computation_model_deleted(sw_client, comp_model_id):
     wait_for_resource_deleted(f'ComputationalModel {comp_model_id}',
         lambda: sw_client.describe_computation_model(computationModelId=comp_model_id)['computationModelStatus'])
@@ -63,104 +48,93 @@ def paginate_list(list_func, output_key, return_val_func, params=None):
 
 
 def all_asset_models(sw_client):
-    return paginate_list(
-        sw_client.list_asset_models,
-        'assetModelSummaries',
-        lambda model: sw_client.describe_asset_model(assetModelId=model['id']))
+    paginator = sw_client.get_paginator('list_asset_models')
+    for response in paginator.paginate():
+        for asset_model in response['assetModelSummaries']:
+            yield sw_client.describe_asset_model(assetModelId=asset_model['id'])
 
 
 def asset_ids(sw_client, asset_model_id):
-    return paginate_list(
-        sw_client.list_assets,
-        'assetSummaries',
-        lambda asset: asset['id'],
-        {'assetModelId': asset_model_id})
-
-
-def list_associated_assets_for_parent(sw_client, parent_asset_id, hierarchy_id):
-    return paginate_list(
-        sw_client.list_associated_assets,
-        'assetSummaries',
-        lambda child_asset: {'assetId': parent_asset_id,
-                             'childAssetId': child_asset['id'],
-                             'hierarchyId': hierarchy_id},
-        {'assetId': parent_asset_id, 'hierarchyId': hierarchy_id})
+    paginator = sw_client.get_paginator('list_assets')
+    for response in paginator.paginate(assetModelId=asset_model_id):
+        for asset in response['assetSummaries']:
+            yield asset['id']
 
 
 def list_associated_assets(sw_client, asset_id, hierarchy_ids):
+    paginator = sw_client.get_paginator('list_associated_assets')
     for hierarchy_id in hierarchy_ids:
-        for association in list_associated_assets_for_parent(sw_client, asset_id, hierarchy_id):
-            yield association
+        for response in paginator.paginate(assetId=asset_id, hierarchyId=hierarchy_id):
+            for child_asset in response['assetSummaries']:
+                yield {'assetId': asset_id,
+                       'childAssetId': child_asset['id'],
+                       'hierarchyId': hierarchy_id}
 
 
 def gateway_ids(sw_client):
-    return paginate_list(
-        sw_client.list_gateways,
-        'gatewaySummaries',
-        lambda gateway: gateway['gatewayId'])
+    paginator = sw_client.get_paginator('list_gateways')
+    for response in paginator.paginate():
+        for gateway in response['gatewaySummaries']:
+            yield gateway['gatewayId']
 
 
 def portal_ids(sw_client):
-    return paginate_list(
-        sw_client.list_portals,
-        'portalSummaries',
-        lambda portal: portal['id'])
+    paginator = sw_client.get_paginator('list_portals')
+    for response in paginator.paginate():
+        for portal in response['portalSummaries']:
+            yield portal['id']
 
 
 def project_ids(sw_client, portal_id):
-    return paginate_list(
-        sw_client.list_projects,
-        'projectSummaries',
-        lambda project: project['id'],
-        {'portalId': portal_id})
+    paginator = sw_client.get_paginator('list_projects')
+    for response in paginator.paginate(portalId=portal_id):
+        for project in response['projectSummaries']:
+            yield project['id']
 
 
 def dashboard_ids(sw_client, project_id):
-    return paginate_list(
-        sw_client.list_dashboards,
-        'dashboardSummaries',
-        lambda dashboard: dashboard['id'],
-        {'projectId': project_id})
+    paginator = sw_client.get_paginator('list_dashboards')
+    for response in paginator.paginate(projectId=project_id):
+        for dashboard in response['dashboardSummaries']:
+            yield dashboard['id']
 
 
 def access_policy_ids(sw_client, resource_id, resource_type):
-    return paginate_list(
-        sw_client.list_access_policies,
-        'accessPolicySummaries',
-        lambda policy: policy['id'],
-        {'resourceId': resource_id, 'resourceType': resource_type})
+    paginator = sw_client.get_paginator('list_access_policies')
+    for response in paginator.paginate(resourceId=resource_id, resourceType=resource_type):
+        for policy in response['accessPolicySummaries']:
+            yield policy['id']
 
 
 def computation_model_ids(sw_client):
-    return paginate_list(
-        sw_client.list_computation_models,
-        'computationModelSummaries',
-        lambda comp_model: comp_model['id'])
+    paginator = sw_client.get_paginator('list_computation_models')
+    for response in paginator.paginate():
+        for computation_model in response['computationModelSummaries']:
+            yield computation_model['id']
 
 
 def workspace_names(sw_client):
-    return paginate_list(
-        sw_client.list_workspaces,
-        'workspaceSummaries',
-        lambda workspace: workspace['name'])
+    paginator = sw_client.get_paginator('list_workspaces')
+    for response in paginator.paginate():
+        for workspace in response['workspaceSummaries']:
+            yield workspace['name']
 
 
 def dataset_ids(sw_client, source_type, workspace_name=None):
     params = { 'sourceType': source_type }
     if workspace_name is not None:
         params['workspaceName'] = workspace_name
-    return paginate_list(
-        sw_client.list_datasets,
-        'datasetSummaries',
-        lambda dataset: dataset['id'],
-        params)
+    paginator = sw_client.get_paginator('list_datasets')
+    for response in paginator.paginate(**params):
+        for dataset in response['datasetSummaries']:
+            yield dataset['id']
 
 
 def time_series_aliases(sw_client):
-    return paginate_list(
-        sw_client.list_time_series,
-        'TimeSeriesSummaries',
-        lambda time_series: time_series['alias'])
+    paginator = sw_client.get_paginator('list_time_series')
+    for response in paginator.paginate():
+        for time_series in response['TimeSeriesSummaries']:
+            yield time_series['alias']
 
 
 def topological_sort(asset_models):
@@ -204,14 +178,14 @@ def delete_asset_model_assets(sw_client, asset_model):
 
         print(f'Deleting Asset {asset_id}...', end='', flush=True)
         sw_client.delete_asset(assetId=asset_id)
-        wait_for_asset_deleted(sw_client, asset_id)
+        sw_client.get_waiter('asset_not_exists').wait(assetId=asset_id)
         print('done')
 
 
 def delete_asset_model(sw_client, asset_model_id):
     print(f'Deleting AssetModel {asset_model_id}...', end='', flush=True)
     sw_client.delete_asset_model(assetModelId=asset_model_id)
-    wait_for_asset_model_deleted(sw_client, asset_model_id)
+    sw_client.get_waiter('asset_model_not_exists').wait(assetModelId=asset_model_id)
     print('done')
 
 
@@ -234,7 +208,7 @@ def delete_portal(sw_client, portal_id):
     delete_access_policies(sw_client, portal_id, 'PORTAL')
     print(f'Deleting Portal {portal_id}...', end='', flush=True)
     sw_client.delete_portal(portalId=portal_id)
-    wait_for_portal_deleted(sw_client, portal_id)
+    sw_client.get_waiter('portal_not_exists').wait(portalId=portal_id)
     print('done')
 
 
@@ -289,7 +263,7 @@ def delete_models_and_assets(sw_client):
 
 def delete_timeseries(sw_client):
     for time_series_alias in time_series_aliases(sw_client):
-        sw_client.delete_time_series(time_series_alias)
+        sw_client.delete_time_series(alias=time_series_alias)
         print(f"Deleted TimeSeries '{time_series_alias}'")
 
 

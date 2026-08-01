@@ -33,30 +33,14 @@ def delete_asset_model(sitewise, asset_model_id, asset_model_name):
 
 def wait_for_asset_deleted(sitewise, asset_id, asset_name):
     print(f'Waiting for Asset {asset_name} to be deleted...', end = '', flush=True)
-    for _ in range(0, 60):
-        try:
-            status = sitewise.describe_asset(assetId=asset_id)['assetStatus']
-            print('.', end = '', flush=True)
-            time.sleep(1)
-        except sitewise.exceptions.ResourceNotFoundException:
-            print('done')
-            return
-    print('failed')
-    raise Exception(f'Failed to delete Asset {asset_name} ({asset_id}). Final status: {status}')
+    sitewise.get_waiter('asset_not_exists').wait(assetId=asset_id)
+    print('done')
 
 
 def wait_for_asset_model_deleted(sitewise, asset_model_id, asset_model_name):
     print(f'Waiting for AssetModel {asset_model_name} to be deleted...', end = '', flush=True)
-    for _ in range(0, 60):
-        try:
-            status = sitewise.describe_asset_model(assetModelId=asset_model_id)['assetModelStatus']
-            print('.', end = '', flush=True)
-            time.sleep(1)
-        except sitewise.exceptions.ResourceNotFoundException:
-            print('done')
-            return
-    print('failed')
-    raise Exception(f'Failed to delete AssetModel {asset_model_name} ({asset_model_id}). Final status: {status}')
+    sitewise.get_waiter('asset_model_not_exists').wait(assetModelId=asset_model_id)
+    print('done')
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
