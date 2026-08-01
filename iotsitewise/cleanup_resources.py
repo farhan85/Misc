@@ -152,18 +152,15 @@ def topological_sort(asset_models):
             adjacency_graph.setdefault(int_id, set()).add(am_id)
 
     # Apply Kahn's algorithm to construct the topological sort
-    parent_count = {am_id: len(parent_ids) for am_id, parent_ids in adjacency_graph.items()}
-    curr_batch = set(am_id for am_id, num_parents in parent_count.items() if num_parents == 0)
-    while curr_batch:
-        yield [asset_model_id_map[am_id] for am_id in curr_batch]
-        next_batch = set()
-        for am_id in curr_batch:
-            for candidate, parent_ids in adjacency_graph.items():
-                if am_id in parent_ids:
-                    parent_count[candidate] -= 1
-                    if parent_count[candidate] == 0:
-                        next_batch.add(candidate)
-        curr_batch = next_batch
+    while adjacency_graph:
+        next_batch = set(am_id for am_id, parent_ids in adjacency_graph.items() if len(parent_ids) == 0)
+        yield [asset_model_id_map[am_id] for am_id in next_batch]
+        for am_id in next_batch:
+            # Remove the processed parent IDs from the graph
+            del adjacency_graph[am_id]
+        for parent_ids in adjacency_graph.values():
+            # Remove the processed parent IDs from the current parent IDs set
+            parent_ids.difference_update(next_batch)
 
 
 def delete_asset_model_assets(sw_client, asset_model):
