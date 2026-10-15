@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+
+CSV_FILE="${1:-}"
+
+[[ -z "$CSV_FILE" ]] && { echo "Missing filename"; exit 1; }
+
+sqlite3 :memory: -interactive -header -column \
+    -cmd ".import -csv \"${CSV_FILE}\" data" \
+    -cmd ".print 'table name: data'" \
+    -cmd 'PRAGMA table_info(data);' \
+    -cmd 'select count(*) as num_rows from data'
