@@ -10,11 +10,5 @@
 # origin    git@github.com:farhan85/Misc.git (push)
 
 
-function cleanup {
-    eval $(ssh-agent -k) &>/dev/null
-}
-trap cleanup EXIT
-
-eval $(ssh-agent) &>/dev/null
-ssh-add -k ${HOME}/.ssh/github/id_rsa &>/dev/null
-git $@
+GIT_SSH_COMMAND="ssh -i ${HOME}/.ssh/github/id_rsa -o IdentitiesOnly=yes" \
+    git "$@"
