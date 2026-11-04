@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+    @page {
+        size: A4 portrait;
+        margin: 15mm;
+    }
+    body {
+        font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+        color: #333333;
+        margin: 0; padding: 0;
+    }
+    .page {
+        page-break-after: always;
+    }
+    .page:last-child {
+        page-break-after: avoid;
+    }
+    h1 {
+        color: #1b4332;
+        text-align: center;
+        font-size: 22pt;
+        margin: 0 0 5px 0;
+    }
+    h2 {
+        color: #2d6a4f;
+        text-align: center;
+        font-size: 15pt;
+        margin: 0 0 10px 0;
+        border-bottom: 2px solid #2d6a4f;
+        padding-bottom: 5px;
+    }
+    table {
+        width: 100%;
+        border-collapse: collapse;
+        /* Column widths come from the header row only, not cell content */
+        table-layout: fixed;
+        font-size: 12pt;
+        line-height: 1.2;
+    }
+    th {
+        background-color: #2d6a4f;
+        color: white;
+        font-weight: bold;
+        padding: 4px 6px;
+        text-align: center;
+        border: 1px solid #cccccc;
+    }
+    td {
+        /* Tight vertical padding so 31 rows of 12pt text fit on one A4 page */
+        padding: 4px 6px;
+        text-align: center;
+        border: 1px solid #e0e0e0;
+    }
+    tr:nth-child(even) {
+        background-color: #f9fbf9;
+    }
+    tr.weekend {
+        background-color: #ededed;
+        font-weight: 500;
+    }
+    /* Fixed-width boxes so day numbers line up regardless of digit count */
+    .day-num {
+        display: inline-block;
+        width: 2.2em;
+        text-align: right;
+        font-weight: bold;
+        font-variant-numeric: tabular-nums;
+    }
+    .day-name {
+        display: inline-block;
+        width: 3.2em;
+        text-align: left;
+        padding-left: 0.4em;
+        font-size: 9pt;
+        color: #666;
+    }
+</style>
+</head>
+<body>
+
+{% for month in months %}
+<div class="page">
+    <h1>{{ location_title }} Prayer Timetable</h1>
+    <h2>{{ month.name }} {{ year }}</h2>
+    <table>
+        <colgroup>
+            <col style="width: 15%;">
+            <col style="width: 17%;">
+            <col style="width: 17%;">
+            <col style="width: 17%;">
+            <col style="width: 17%;">
+            <col style="width: 17%;">
+        </colgroup>
+        <thead>
+            <tr>
+                <th>Day</th>
+                <th>Fajr</th>
+                <th>Dhuhr</th>
+                <th>Asr</th>
+                <th>Maghrib</th>
+                <th>Isha</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for day in month.days %}
+            <tr class="{% if day.is_weekend %}weekend{% endif %}">
+                <td>
+                    <span class="day-num">{{ day.day_num }}</span>
+                    <span class="day-name">{{ day.day_name[:3] }}</span>
+                </td>
+                <td>{{ day.fajr }}</td>
+                <td>{{ day.dhuhr }}</td>
+                <td>{{ day.asr }}</td>
+                <td>{{ day.maghrib }}</td>
+                <td>{{ day.isha }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endfor %}
+
+</body>
+</html>
+
