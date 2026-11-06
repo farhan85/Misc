@@ -12,6 +12,8 @@ HTML_TEMPLATE = 'calendar.html.j2'
 CSS_FILE = 'calendar.css'
 DAY_NAMES = ('Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday')
 MAX_CALENDAR_WEEKS = 6
+# Every month is rendered with this many rows so the gap below the table is the same on every page
+CALENDAR_ROWS = 5
 
 
 class DayType(Enum):
@@ -70,9 +72,29 @@ class CalendarInfo(object):
     def __init__(self):
         self.days = {}
 
+    @staticmethod
+    def from_config(config):
+        calendar_info = CalendarInfo()
+        year = int(config['MAIN']['year'])
+        for holiday_range in config['SCHOOL HOLIDAYS'].values():
+            s_start_date, s_end_date = (d.strip() for d in holiday_range.split('-'))
+            start_date, end_date = to_date(s_start_date, year), to_date(s_end_date, year)
+            for d in date_range(start_date, end_date):
+                calendar_info.for_day(d.month, d.day).update(day_type=DayType.SCHOOL_HOLIDAY)
+        for dt, note in config['PUBLIC HOLIDAYS'].items():
+            dt = to_date(dt, year)
+            calendar_info.for_day(dt.month, dt.day).update(DayType.PUBLIC_HOLIDAY, note)
+        for dt, note in config['MISC DAYS'].items():
+            dt = to_date(dt, year)
+            note = [n.strip() for n in note.split(',')]
+            calendar_info.for_day(dt.month, dt.day).update(notes=note)
+        return calendar_info
+
     def for_day(self, month, day):
         d_month = self.days.setdefault(month, {})
-        return d_month.setdefault(day, Cell(day))
+        if day not in d_month:
+            d_month[day] = Cell(day)
+        return d_month[day]
 
     def __str__(self):
         return repr(self)
@@ -81,7 +103,7 @@ class CalendarInfo(object):
         return str(self.days)
 
 
-class MonthConfig(object):
+class Month(object):
     """ The month being rendered into the jinja page of a monthly calendar """
 
     def __init__(self, year, month, calendar_info):
@@ -91,24 +113,26 @@ class MonthConfig(object):
         self.name = self.first_day.strftime('%B')
         _days = Calendar(firstweekday=6).monthdayscalendar(year, month)
         if len(_days) == MAX_CALENDAR_WEEKS:
-            first_row = self.merge_lists(_days[0], _days[-1])
-            _days = [first_row] + _days[1:-1]
+            # Merge the last row into the first
+            first_row, last_row = _days.pop(0), _days.pop()
+            first_row = [x or y for x, y in zip(first_row, last_row)]
+            _days.insert(0, first_row)
+
+        self.num_weeks = len(_days)   # real weeks, before padding
+
+        # Pad short months with blank weeks up to CALENDAR_ROWS
+        extra_weeks = CALENDAR_ROWS - len(_days)
+        padding = [[0] * 7 for _ in range(extra_weeks)]
+        _days += padding
 
         self.days = _days
-
-    @staticmethod
-    def merge_lists(lst1, lst2):
-        return [x if x != 0 else y for x, y in zip(lst1, lst2)]
 
     def num_rows(self):
         return len(self.days)
 
     def cell(self, row, col):
         day = self.days[row][col]
-        if day == 0:
-            return Cell()
-        else:
-            return self.calendar_info.for_day(self.month, day)
+        return self.calendar_info.for_day(self.month, day) if day else Cell()
 
 
 def date_range(start_date, end_date):
@@ -121,39 +145,11 @@ def to_date(s, year):
     return datetime.strptime(f'{s} {year}', '%d %b %Y').date()
 
 
-def load_calendar_info(config):
-    calendar_info = CalendarInfo()
-    year = int(config['MAIN']['year'])
-    for holiday_range in config['SCHOOL HOLIDAYS'].values():
-        s_start_date, s_end_date = (d.strip() for d in holiday_range.split('-'))
-        start_date, end_date = to_date(s_start_date, year), to_date(s_end_date, year)
-        for d in date_range(start_date, end_date):
-            calendar_info.for_day(d.month, d.day).update(day_type=DayType.SCHOOL_HOLIDAY)
-    for dt, note in config['PUBLIC HOLIDAYS'].items():
-        dt = to_date(dt, year)
-        calendar_info.for_day(dt.month, dt.day).update(DayType.PUBLIC_HOLIDAY, note)
-    for dt, note in config['MISC DAYS'].items():
-        dt = to_date(dt, year)
-        note = [n.strip() for n in note.split(',')]
-        calendar_info.for_day(dt.month, dt.day).update(notes=note)
-    return calendar_info
-
-
 def calendar_template():
     """ returns the template to use to create the calendar """
     loader = FileSystemLoader('.')
     env = Environment(loader=loader, autoescape=select_autoescape(['html']))
     return env.get_template(HTML_TEMPLATE)
-
-
-def rotate(lst, pos):
-    if pos <= 0 or pos >= len(lst):
-        return lst
-    return lst[pos:] + lst[:pos]
-
-
-def render_month_page(template, year, month_config):
-    return template.render(year=year, month=month_config, days=DAY_NAMES)
 
 
 @click.command(context_settings={'help_option_names': ['-h', '--help']})
@@ -166,10 +162,10 @@ def main(config_file):
     print('Loading...')
     year = int(conf['MAIN']['year'])
     fname = f'calendar_{year}.pdf'
-    calendar_info = load_calendar_info(conf)
+    calendar_info = CalendarInfo.from_config(conf)
     template = calendar_template()
-    month_configs = [MonthConfig(year, m, calendar_info) for m in range(1, 13)]
-    html_str =  template.render(year=year, months=month_configs, days=DAY_NAMES)
+    months = [Month(year, m, calendar_info) for m in range(1, 13)]
+    html_str =  template.render(year=year, months=months, days=DAY_NAMES)
     html = HTML(string=html_str)
     html.write_pdf(fname, stylesheets=[CSS(filename=CSS_FILE)])
     print(f'Calendar saved at {fname}')

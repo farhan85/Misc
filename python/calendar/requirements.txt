@@ -1,6 +1,3 @@
-Click
-configparser
-enum34
+click
 Jinja2
-pdfkit
-PyYAML
+weasyprint

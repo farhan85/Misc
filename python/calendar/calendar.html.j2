@@ -1,0 +1,47 @@
+<html>
+    <head>
+        <meta name=author, content='Farhan Ahammed'>
+        <title>Calendar {{ year }}</title>
+    </head>
+
+    <body>
+        {% for month in months %}
+
+        <h1>{{ month.name }} {{ year }}</h1>
+
+        <div class="div-table">
+            <div class="div-table-body">
+                <div class="div-table-row">
+                    {%- for day in days -%}
+                    <div class="div-table-header">{{ day }}</div>
+                    {% endfor %}
+                </div>
+
+                {% for row in range(0, month.num_rows()) %}
+                <div class="div-table-row{% if row >= month.num_weeks %} div-table-row-padding{% endif %}">
+                    {%- for col in range(0,7) -%}
+                    {% set cell = month.cell(row, col) %}
+                    <div class="div-table-cell
+							{%- if cell.day_type.value == 2 -%}
+                                {{ ' ' }}div-school-holiday
+							{%- elif cell.day_type.value == 3 -%}
+                                {{ ' ' }}div-public-holiday
+							{% endif %}">
+                        <div class="div-table-cell-day">{{ cell.day }}</div>
+                        <div class="div-table-cell-content">{{ cell.notes | join('<br />') }}</div>
+                    </div>
+                    {% endfor %}
+                </div>
+                {% endfor %}
+
+            </div> <!-- div-table-body -->
+        </div> <!-- div-table -->
+        
+        {% if not loop.last %}
+        <p style="page-break-before: always" ></p>
+        {% endif %}
+
+        {% endfor %}
+
+    </body>
+</html>
